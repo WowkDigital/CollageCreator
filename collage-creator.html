@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Collage Creator Pro - Dark Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bgDark: '#1a1a2e',
+                        panelDark: '#2c2c54',
+                        textLight: '#e0e0e0',
+                        accent: '#4f46e5',
+                        accentGreen: '#4ade80'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+        }
+        
+        /* Custom Inputs for Dark Mode */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #4ade80;
+            cursor: pointer;
+            margin-top: -6px; 
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #4a5568;
+            border-radius: 2px;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568; 
+            border-radius: 4px;
+        }
+
+        /* Loader */
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top: 3px solid #4ade80;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 768px) {
+            .mobile-preview-height {
+                height: 45vh;
+                min-height: 250px;
+            }
+        }
+
+        /* Drag active state */
+        .drag-active {
+            border-color: #4ade80 !important;
+            background-color: rgba(74, 222, 128, 0.1) !important;
+        }
+    </style>
+</head>
+<body class="h-[100dvh] flex flex-col overflow-hidden font-sans">
+
+    <!-- Header -->
+    <header class="bg-panelDark border-b border-gray-700 h-14 md:h-16 flex items-center justify-between px-4 md:px-6 shadow-md z-30 shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="bg-accent/20 p-1.5 md:p-2 rounded-lg">
+                <i data-lucide="layout" class="text-accentGreen w-4 h-4 md:w-5 md:h-5"></i>
+            </div>
+            <h1 class="text-lg md:text-xl font-bold text-textLight truncate">Collage <span class="hidden sm:inline">Creator</span> <span class="text-accentGreen">Pro</span></h1>
+        </div>
+        <div class="flex gap-2">
+             <button id="resetBtn" class="px-3 py-1.5 text-xs md:text-sm font-medium text-gray-400 hover:text-red-400 transition flex items-center gap-1.5 border border-gray-600 rounded-md hover:border-red-400">
+                <i data-lucide="trash-2" class="w-3 h-3 md:w-4 md:h-4"></i> <span class="hidden sm:inline">Reset</span>
+            </button>
+            <button id="generateBtn" class="bg-accent hover:bg-indigo-600 text-white px-3 md:px-5 py-1.5 md:py-2 rounded-lg font-medium text-xs md:text-sm shadow-[0_4px_12px_rgba(79,70,229,0.3)] transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none" disabled>
+                <span>Done</span>
+                <i data-lucide="check" class="w-3 h-3 md:w-4 md:h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Wrapper -->
+    <div class="flex flex-col md:flex-row flex-1 overflow-hidden relative">
+        
+        <!-- Preview Area (Top on Mobile, Right on Desktop) -->
+        <main class="order-1 md:order-2 flex-1 bg-bgDark relative flex flex-col items-center justify-center p-2 md:p-4 overflow-hidden mobile-preview-height md:h-full z-10 border-b md:border-b-0 md:border-l border-gray-700">
+            
+            <!-- Info Bar -->
+            <div id="infoBar" class="absolute top-4 bg-panelDark/90 backdrop-blur shadow-lg border border-gray-700 px-3 py-1.5 rounded-full text-[10px] md:text-xs font-medium text-gray-300 hidden z-20 flex items-center gap-2">
+                <span id="dimsDisplay">0 x 0 px</span>
+                <span class="w-px h-3 bg-gray-600 mx-1"></span>
+                <span id="modeDisplay" class="text-gray-400">Preview</span>
+            </div>
+
+            <!-- Canvas/Image Container -->
+            <!-- flex-1 min-h-0 is crucial for flexbox child scrolling/scaling -->
+            <div class="relative w-full h-full flex flex-col items-center justify-center flex-1 min-h-0">
+                
+                <!-- Empty State (Drop Zone) -->
+                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center z-10 p-6 text-center border-2 border-transparent border-dashed rounded-xl transition-all">
+                    <div class="bg-gray-700/30 p-4 rounded-full mb-3 ring-1 ring-gray-600/50 pointer-events-none">
+                        <i data-lucide="image-plus" class="w-8 h-8 md:w-10 md:h-10 text-gray-500"></i>
+                    </div>
+                    <h3 class="text-gray-200 font-medium text-lg pointer-events-none">Start Here</h3>
+                    <p class="text-gray-500 text-xs md:text-sm mt-1 max-w-[250px] pointer-events-none">Drag and drop images here or use the button in the panel.</p>
+                </div>
+
+                <!-- Canvas Wrapper -->
+                <!-- Added padding (p-1) so it doesn't touch edges -->
+                <!-- Use w-full h-full to fill parent, but CSS on canvas will restrict it -->
+                <div id="canvasWrapper" class="relative w-full h-full flex items-center justify-center hidden p-1">
+                    <!-- canvas CSS: max-w-full max-h-full ensures it never overflows container. w-auto h-auto ensures aspect ratio is kept -->
+                    <canvas id="mainCanvas" class="max-w-full max-h-full w-auto h-auto object-contain block shadow-2xl border-2 border-gray-700/50 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iIzFhMWEyZSI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjMmMyYzU0IiAvPjxyZWN0IHg9IjEwIiB5PSIxMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjMmMyYzU0IiAvPjwvc3ZnPg==')]"></canvas>
+                </div>
+                
+                <!-- Final Result Image (Hidden by default) -->
+                <div id="resultWrapper" class="hidden w-full h-full flex flex-col items-center justify-center p-1">
+                    <!-- Image container - fills available space, centers image -->
+                    <div class="flex-1 min-h-0 w-full flex items-center justify-center mb-4">
+                        <img id="resultImage" class="max-w-full max-h-full w-auto h-auto shadow-xl border border-gray-600 rounded-sm object-contain" alt="Collage">
+                    </div>
+                    
+                    <!-- Buttons - fixed height at bottom -->
+                    <div class="shrink-0 flex gap-2 flex-wrap justify-center bg-panelDark p-2 rounded-xl border border-gray-700 shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-300 z-30">
+                        <button id="downloadLinkBtn" class="bg-accent hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                            <i data-lucide="download" class="w-4 h-4"></i> Save
+                        </button>
+                        <button id="copyBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                            <i data-lucide="copy" class="w-4 h-4"></i> Copy
+                        </button>
+                        <button id="backToEditBtn" class="bg-transparent hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-sm font-medium border border-gray-600">
+                            <i data-lucide="edit-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sidebar (Controls) - Bottom on Mobile, Left on Desktop -->
+        <aside class="order-2 md:order-1 w-full md:w-96 bg-panelDark md:border-r border-t md:border-t-0 border-gray-700 overflow-y-auto flex-1 md:flex-none flex flex-col shadow-[0_-4px_20px_rgba(0,0,0,0.4)] z-20">
+            <div class="p-4 md:p-6 space-y-6 md:space-y-8 pb-20 md:pb-6">
+                
+                <!-- Upload Section -->
+                <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-xl p-4 md:p-6 text-center transition-all cursor-pointer hover:border-accentGreen hover:bg-gray-700/30 group relative bg-bgDark/30">
+                    <input type="file" id="imageUpload" multiple accept="image/*" class="hidden">
+                    <div class="flex flex-col items-center justify-center gap-2 pointer-events-none">
+                        <div class="w-10 h-10 md:w-12 md:h-12 bg-gray-700 text-gray-400 rounded-full flex items-center justify-center mb-1 group-hover:scale-110 group-hover:text-accentGreen transition-all">
+                            <i data-lucide="plus" class="w-5 h-5 md:w-6 md:h-6"></i>
+                        </div>
+                        <p class="text-xs md:text-sm font-medium text-gray-300">Add Images</p>
+                    </div>
+                </div>
+
+                <!-- Thumbnails List (Reorder) -->
+                <div id="thumbnailsSection" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-[10px] md:text-xs font-semibold text-gray-400 uppercase tracking-wider">Images (<span id="imgCount">0</span>)</h3>
+                        <button id="shuffleBtn" class="text-[10px] md:text-xs text-accentGreen hover:underline flex items-center gap-1">
+                            <i data-lucide="shuffle" class="w-3 h-3"></i> Shuffle
+                         </button>
+                    </div>
+                    <!-- Zmiana na grid 3 kolumny -->
+                    <div id="thumbnailsList" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[250px] p-1 custom-scrollbar">
+                        <!-- JS fills this -->
+                    </div>
+                </div>
+
+                <!-- Settings Accordion -->
+                <div id="settingsSection" class="space-y-4 md:space-y-6 opacity-50 pointer-events-none transition-opacity duration-300">
+                    
+                    <!-- Layout Mode -->
+                    <div class="bg-bgDark/50 p-3 md:p-4 rounded-xl border border-gray-700">
+                        <h3 class="text-xs md:text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                            <i data-lucide="grid" class="w-3 h-3 md:w-4 md:h-4 text-accentGreen"></i> Layout
+                        </h3>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="layout" value="masonry" class="peer hidden" checked>
+                                <div class="border border-gray-600 rounded-md p-1.5 md:p-2 text-center text-[10px] md:text-xs hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
+                                    Masonry
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="layout" value="grid" class="peer hidden">
+                                <div class="border border-gray-600 rounded-md p-1.5 md:p-2 text-center text-[10px] md:text-xs hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
+                                    Grid
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="layout" value="row" class="peer hidden">
+                                <div class="border border-gray-600 rounded-md p-1.5 md:p-2 text-center text-[10px] md:text-xs hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
+                                    Rows
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <!-- Columns/Rows Slider -->
+                        <div class="mt-4" id="columnsControl">
+                            <div class="flex justify-between text-[10px] md:text-xs mb-1 text-gray-400">
+                                <span id="countLabel">Columns</span>
+                                <span id="colCountVal" class="font-medium text-white">3</span>
+                            </div>
+                            <input type="range" id="colCount" min="1" max="8" value="3" class="w-full h-8 md:h-auto">
+                        </div>
+                    </div>
+
+                    <!-- Styling -->
+                    <div class="bg-bgDark/50 p-3 md:p-4 rounded-xl border border-gray-700">
+                        <h3 class="text-xs md:text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                            <i data-lucide="palette" class="w-3 h-3 md:w-4 md:h-4 text-accentGreen"></i> Styling
+                        </h3>
+                        
+                        <!-- Gap & Radius (Grid 2 cols) -->
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <div class="flex justify-between text-[10px] md:text-xs mb-1 text-gray-400">
+                                    <span>Gap</span>
+                                    <span id="gapVal" class="text-white">10</span>
+                                </div>
+                                <input type="range" id="gapSize" min="0" max="100" value="10" class="w-full">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] md:text-xs mb-1 text-gray-400">
+                                    <span>Radius</span>
+                                    <span id="radiusVal" class="text-white">0</span>
+                                </div>
+                                <input type="range" id="radiusSize" min="0" max="100" value="0" class="w-full">
+                            </div>
+                        </div>
+
+                        <!-- Background Color -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-[10px] md:text-xs text-gray-400">Background Color</span>
+                            </div>
+                            <div class="flex gap-3 mb-2 overflow-x-auto pb-1 no-scrollbar">
+                                <button class="w-8 h-8 md:w-6 md:h-6 shrink-0 rounded-full border border-gray-600 bg-white shadow-sm" onclick="setBg('#ffffff')"></button>
+                                <button class="w-8 h-8 md:w-6 md:h-6 shrink-0 rounded-full border border-gray-600 bg-black shadow-sm" onclick="setBg('#000000')"></button>
+                                <button class="w-8 h-8 md:w-6 md:h-6 shrink-0 rounded-full border border-gray-600 bg-[#1a1a2e] shadow-sm" onclick="setBg('#1a1a2e')"></button>
+                                <button class="w-8 h-8 md:w-6 md:h-6 shrink-0 rounded-full border border-gray-600 bg-[#fef3c7] shadow-sm" onclick="setBg('#fef3c7')"></button>
+                                <button class="w-8 h-8 md:w-6 md:h-6 shrink-0 rounded-full border border-gray-600 bg-[#4ade80] shadow-sm" onclick="setBg('#4ade80')"></button>
+                                <div class="relative w-8 h-8 md:w-6 md:h-6 shrink-0 rounded-full border border-gray-600 overflow-hidden flex items-center justify-center bg-gray-700">
+                                     <input type="color" id="bgColor" value="#ffffff" class="absolute inset-0 w-[150%] h-[150%] -top-[25%] -left-[25%] cursor-pointer p-0 border-0 opacity-0">
+                                     <i data-lucide="plus" class="w-3 h-3 text-white pointer-events-none"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Output Settings (Desktop only mostly needed, simplified for mobile) -->
+                    <div class="bg-bgDark/50 p-3 md:p-4 rounded-xl border border-gray-700">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-xs md:text-sm font-semibold text-gray-300 flex items-center gap-2">
+                                <i data-lucide="settings-2" class="w-3 h-3 md:w-4 md:h-4 text-accentGreen"></i> Output
+                            </h3>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                             <div>
+                                <label class="block text-[10px] md:text-xs text-gray-400 mb-1">Width</label>
+                                <!-- Zmieniona domyślna szerokość na 2000 -->
+                                <input type="number" id="canvasWidth" value="2000" class="w-full text-xs md:text-sm bg-gray-700 text-white border border-gray-600 rounded-md p-1.5 md:p-2 focus:border-accentGreen focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] md:text-xs text-gray-400 mb-1">Format</label>
+                                <select id="exportFormat" class="w-full text-xs md:text-sm bg-gray-700 text-white border border-gray-600 rounded-md p-1.5 md:p-2 focus:border-accentGreen focus:outline-none">
+                                    <option value="image/jpeg">JPEG</option>
+                                    <option value="image/png">PNG</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </aside>
+
+        <!-- Loader overlay -->
+        <div id="processingIndicator" class="hidden absolute inset-0 bg-bgDark/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+            <div class="bg-panelDark p-6 rounded-2xl shadow-2xl border border-gray-700 flex flex-col items-center gap-4">
+                <div class="loader w-8 h-8 border-4"></div>
+                <div class="text-center">
+                    <span class="text-sm font-medium text-textLight block">Processing images...</span>
+                    <span id="loaderCount" class="text-xs text-gray-400 mt-1"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Init Icons ---
+        lucide.createIcons();
+
+        // --- DOM Elements ---
+        const dropZone = document.getElementById('dropZone');
+        const emptyState = document.getElementById('emptyState');
+        const fileInput = document.getElementById('imageUpload');
+        const thumbnailsList = document.getElementById('thumbnailsList');
+        const settingsSection = document.getElementById('settingsSection');
+        const canvasWrapper = document.getElementById('canvasWrapper');
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const generateBtn = document.getElementById('generateBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const shuffleBtn = document.getElementById('shuffleBtn');
+        const infoBar = document.getElementById('infoBar');
+        const imgCountSpan = document.getElementById('imgCount');
+        const processingIndicator = document.getElementById('processingIndicator');
+        const loaderCount = document.getElementById('loaderCount');
+        const resultWrapper = document.getElementById('resultWrapper');
+        const resultImage = document.getElementById('resultImage');
+        const downloadLinkBtn = document.getElementById('downloadLinkBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const backToEditBtn = document.getElementById('backToEditBtn');
+
+        // Inputs
+        const inputs = {
+            layout: document.getElementsByName('layout'),
+            colCount: document.getElementById('colCount'),
+            countLabel: document.getElementById('countLabel'),
+            gapSize: document.getElementById('gapSize'),
+            radiusSize: document.getElementById('radiusSize'),
+            bgColor: document.getElementById('bgColor'),
+            canvasWidth: document.getElementById('canvasWidth'),
+            format: document.getElementById('exportFormat')
+        };
+
+        // State
+        let images = []; 
+        const MAX_THUMB_SIZE = 400;
+
+        // --- Event Listeners ---
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        // Obsługa kliknięcia na pusty stan (o ile nie kliknięto w input)
+        emptyState.addEventListener('click', (e) => {
+             if (e.target !== emptyState) return; 
+             // Opcjonalnie można włączyć input, ale tutaj zostawiam drag & drop + panel boczny jako główne
+        });
+
+        fileInput.addEventListener('change', handleFiles);
+        shuffleBtn.addEventListener('click', () => {
+            images.sort(() => Math.random() - 0.5);
+            triggerRender();
+        });
+
+        window.setBg = (color) => {
+            inputs.bgColor.value = color;
+            inputs.bgColor.dispatchEvent(new Event('input'));
+        };
+
+        // Drag & Drop Handling (Unified for dropZone and emptyState)
+        const dragTargets = [dropZone, document.body, emptyState];
+        
+        dragTargets.forEach(target => {
+            target.addEventListener('dragenter', preventDefaults, false);
+            target.addEventListener('dragover', highlight, false);
+            target.addEventListener('dragleave', unhighlight, false);
+            target.addEventListener('drop', handleDrop, false);
+        });
+
+        function preventDefaults(e) { 
+            e.preventDefault(); 
+            e.stopPropagation(); 
+        }
+
+        function highlight(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('drag-active');
+            emptyState.classList.add('drag-active');
+            emptyState.style.borderColor = '#4ade80';
+            emptyState.style.backgroundColor = 'rgba(74, 222, 128, 0.1)';
+        }
+
+        function unhighlight(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-active');
+            emptyState.classList.remove('drag-active');
+            emptyState.style.borderColor = 'transparent';
+            emptyState.style.backgroundColor = 'transparent';
+        }
+
+        function handleDrop(e) {
+            unhighlight(e);
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles({ target: { files } });
+        }
+
+        // Settings Live Update
+        let renderTimeout;
+        const triggerRender = () => {
+            clearTimeout(renderTimeout);
+            renderTimeout = setTimeout(() => renderCollage(false), 20); 
+        };
+
+        Object.values(inputs).forEach(input => {
+            if (input instanceof NodeList) input.forEach(r => r.addEventListener('change', () => { updateValueDisplays(); triggerRender(); }));
+            else if (input instanceof HTMLElement) input.addEventListener('input', () => { updateValueDisplays(); triggerRender(); });
+        });
+
+        // ACTIONS
+        resetBtn.addEventListener('click', () => {
+            if(confirm('Delete everything and start over?')) {
+                images = [];
+                fileInput.value = ''; // Clear input
+                resultWrapper.classList.add('hidden');
+                canvasWrapper.classList.add('hidden');
+                updateUI();
+                renderCollage(false);
+            }
+        });
+
+        generateBtn.addEventListener('click', async () => {
+            // Loader for Generation
+            processingIndicator.classList.remove('hidden');
+            loaderCount.textContent = "Generating high quality...";
+            
+            // Wait a tick for UI
+            await new Promise(r => setTimeout(r, 50));
+            
+            await renderCollage(true);
+            
+            const format = inputs.format.value;
+            const quality = format === 'image/jpeg' ? 0.95 : undefined;
+            const dataUrl = canvas.toDataURL(format, quality);
+            
+            // Show result view
+            resultImage.src = dataUrl;
+            canvasWrapper.classList.add('hidden');
+            resultWrapper.classList.remove('hidden');
+            infoBar.classList.add('hidden'); // Hide debug info in result mode
+            
+            // Setup download button
+            downloadLinkBtn.onclick = () => {
+                const link = document.createElement('a');
+                link.download = `collage-${Date.now()}.${format.split('/')[1]}`;
+                link.href = dataUrl;
+                link.click();
+            };
+
+            // Setup Copy button (Force PNG for clipboard compatibility)
+            copyBtn.onclick = async () => {
+                try {
+                    // Always request PNG for clipboard, as JPEG support is flaky in Clipboard API
+                    canvas.toBlob(async (blob) => {
+                        if (!blob) {
+                            alert("Image generation error.");
+                            return;
+                        }
+                        try {
+                            const item = new ClipboardItem({ 'image/png': blob });
+                            await navigator.clipboard.write([item]);
+                            
+                            const originalText = copyBtn.innerHTML;
+                            copyBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Copied!';
+                            lucide.createIcons();
+                            setTimeout(() => {
+                                copyBtn.innerHTML = originalText;
+                                lucide.createIcons();
+                            }, 2000);
+                        } catch (err) {
+                            console.error(err);
+                            alert('Failed to copy to clipboard. Your browser might not support this or requires permissions.');
+                        }
+                    }, 'image/png');
+                } catch (err) {
+                    console.error(err);
+                    alert('Error while copying.');
+                }
+            };
+
+            processingIndicator.classList.add('hidden');
+        });
+
+        backToEditBtn.addEventListener('click', () => {
+            resultWrapper.classList.add('hidden');
+            canvasWrapper.classList.remove('hidden');
+            infoBar.classList.remove('hidden');
+            renderCollage(false); // Go back to low res preview
+        });
+
+        // --- Logic ---
+
+        function handleFiles(e) {
+            const files = [...e.target.files];
+            const imageFiles = files.filter(f => f.type.startsWith('image/'));
+            
+            if (imageFiles.length === 0) return;
+
+            // Show Loader
+            processingIndicator.classList.remove('hidden');
+            let loadedCount = 0;
+            const total = imageFiles.length;
+            loaderCount.textContent = `0 / ${total}`;
+
+            imageFiles.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        createThumbnail(img).then(thumbImg => {
+                            images.push({
+                                id: Date.now() + Math.random(),
+                                original: img,
+                                thumb: thumbImg, 
+                                src: img.src
+                            });
+                            loadedCount++;
+                            loaderCount.textContent = `${loadedCount} / ${total}`;
+                            
+                            if (loadedCount >= total) {
+                                // All loaded
+                                processingIndicator.classList.add('hidden');
+                                updateUI();
+                                triggerRender();
+                            }
+                        });
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            fileInput.value = '';
+        }
+
+        function createThumbnail(img) {
+            return new Promise(resolve => {
+                if (img.width <= MAX_THUMB_SIZE && img.height <= MAX_THUMB_SIZE) {
+                    resolve(img);
+                    return;
+                }
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const ratio = img.width / img.height;
+                
+                if (img.width > img.height) {
+                    canvas.width = MAX_THUMB_SIZE;
+                    canvas.height = MAX_THUMB_SIZE / ratio;
+                } else {
+                    canvas.height = MAX_THUMB_SIZE;
+                    canvas.width = MAX_THUMB_SIZE * ratio;
+                }
+                
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const newImg = new Image();
+                newImg.onload = () => resolve(newImg);
+                newImg.src = canvas.toDataURL();
+            });
+        }
+
+        function updateUI() {
+            imgCountSpan.textContent = images.length;
+            
+            if (images.length > 0) {
+                settingsSection.classList.remove('opacity-50', 'pointer-events-none');
+                thumbnailsList.parentElement.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+                canvasWrapper.classList.remove('hidden');
+                generateBtn.disabled = false;
+                infoBar.classList.remove('hidden');
+            } else {
+                settingsSection.classList.add('opacity-50', 'pointer-events-none');
+                thumbnailsList.parentElement.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                canvasWrapper.classList.add('hidden');
+                generateBtn.disabled = true;
+                infoBar.classList.add('hidden');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            renderThumbnails();
+        }
+
+        function renderThumbnails() {
+            thumbnailsList.innerHTML = '';
+            images.forEach((imgObj, index) => {
+                const div = document.createElement('div');
+                // Grid classes for 3x3 layout style items
+                div.className = 'relative w-full aspect-square rounded-md overflow-hidden cursor-move border border-gray-600 bg-gray-800 thumbnail-item';
+                div.draggable = true;
+                div.dataset.index = index;
+
+                const thumb = document.createElement('img');
+                thumb.src = imgObj.thumb.src;
+                thumb.className = 'w-full h-full object-cover pointer-events-none';
+                
+                const btn = document.createElement('button');
+                btn.className = 'absolute top-0 right-0 bg-black/60 text-white p-1 hover:bg-red-500 transition-colors backdrop-blur-sm rounded-bl-md';
+                btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    images.splice(index, 1);
+                    updateUI();
+                    triggerRender();
+                };
+
+                div.appendChild(thumb);
+                div.appendChild(btn);
+                
+                div.addEventListener('dragstart', () => div.classList.add('dragging'));
+                div.addEventListener('dragend', () => {
+                    div.classList.remove('dragging');
+                    reorderImages();
+                });
+                
+                thumbnailsList.appendChild(div);
+            });
+        }
+
+        thumbnailsList.addEventListener('dragover', e => {
+            e.preventDefault();
+            // Basic Reorder logic for Grid
+            const draggable = document.querySelector('.dragging');
+            const target = e.target.closest('.thumbnail-item');
+            if (target && target !== draggable) {
+                const children = [...thumbnailsList.children];
+                const currentIndex = children.indexOf(draggable);
+                const targetIndex = children.indexOf(target);
+                
+                if (currentIndex < targetIndex) {
+                    thumbnailsList.insertBefore(draggable, target.nextSibling);
+                } else {
+                    thumbnailsList.insertBefore(draggable, target);
+                }
+            }
+        });
+        
+        function reorderImages() {
+             const reorderedImages = [];
+             [...thumbnailsList.children].forEach(child => {
+                 if (child.dataset.index !== undefined) {
+                     reorderedImages.push(images[child.dataset.index]);
+                 }
+             });
+             // Fix logic: update dataset indices or just rely on the new array order?
+             // Since dataset.index is old, we need to map via ID or just reconstruct if we trust DOM order.
+             // Simpler approach:
+             const newImages = [];
+             [...thumbnailsList.children].forEach(child => {
+                 const oldIndex = parseInt(child.dataset.index);
+                 newImages.push(images[oldIndex]);
+             });
+             // Due to direct DOM manipulation in dragover, indices get mixed. 
+             // Best is to just re-render fully after drop to clean up indices.
+             // But first we need the correct order.
+             // Let's use unique IDs next time. For now, since we only moved DOM nodes, 
+             // we can rebuild the array.
+             // WAIT: the dragover implementation above mutates DOM.
+             // so the reorderedImages logic needs to simply map DOM nodes back to the original array source
+             // BUT dataset.index is static.
+             
+             // Correct Reorder:
+             const finalImages = [];
+             [...thumbnailsList.children].forEach(child => {
+                 const idx = parseInt(child.dataset.index);
+                 finalImages.push(images[idx]);
+             });
+             images = finalImages;
+             
+             renderThumbnails(); // Re-render to fix indices
+             triggerRender();
+        }
+
+        async function renderCollage(highRes = false) {
+            if (images.length === 0) return;
+
+            const layoutMode = document.querySelector('input[name="layout"]:checked').value;
+            const count = parseInt(inputs.colCount.value);
+            const gap = parseInt(inputs.gapSize.value);
+            const radius = parseInt(inputs.radiusSize.value);
+            const baseWidth = parseInt(inputs.canvasWidth.value) || 2000;
+            const bg = inputs.bgColor.value;
+            // Removed filter variable
+
+            let positions = []; 
+            let finalHeight = 0;
+
+            if (layoutMode === 'masonry') {
+                const colWidth = (baseWidth - (gap * (count + 1))) / count;
+                let colHeights = new Array(count).fill(gap);
+
+                images.forEach(imgObj => {
+                    const img = highRes ? imgObj.original : imgObj.thumb;
+                    const minColIndex = colHeights.indexOf(Math.min(...colHeights));
+                    const x = gap + (minColIndex * (colWidth + gap));
+                    const y = colHeights[minColIndex];
+                    
+                    const aspectRatio = img.naturalHeight / img.naturalWidth;
+                    const h = colWidth * aspectRatio;
+
+                    positions.push({ img, x, y, w: colWidth, h, crop: false });
+                    colHeights[minColIndex] += h + gap;
+                });
+                finalHeight = Math.max(...colHeights);
+
+            } else if (layoutMode === 'grid') {
+                const colWidth = (baseWidth - (gap * (count + 1))) / count;
+                const rowHeight = colWidth;
+                
+                images.forEach((imgObj, i) => {
+                    const img = highRes ? imgObj.original : imgObj.thumb;
+                    const colIndex = i % count;
+                    const rowIndex = Math.floor(i / count);
+                    
+                    const x = gap + (colIndex * (colWidth + gap));
+                    const y = gap + (rowIndex * (rowHeight + gap));
+                    
+                    positions.push({ img, x, y, w: colWidth, h: rowHeight, crop: true });
+                    finalHeight = Math.max(finalHeight, y + rowHeight + gap);
+                });
+
+            } else if (layoutMode === 'row') {
+                const rows = Array.from({ length: count }, () => []);
+                images.forEach((img, i) => rows[i % count].push(img));
+
+                let currentY = gap;
+                rows.forEach(rowImages => {
+                    if (rowImages.length === 0) return;
+                    
+                    let totalAspectRatio = 0;
+                    rowImages.forEach(imgObj => {
+                        const img = highRes ? imgObj.original : imgObj.thumb;
+                        totalAspectRatio += (img.naturalWidth / img.naturalHeight);
+                    });
+
+                    const usefulWidth = baseWidth - (gap * (rowImages.length + 1));
+                    const rowHeight = usefulWidth / totalAspectRatio;
+                    
+                    let currentX = gap;
+                    rowImages.forEach(imgObj => {
+                        const img = highRes ? imgObj.original : imgObj.thumb;
+                        const w = (img.naturalWidth / img.naturalHeight) * rowHeight;
+                        positions.push({ img, x: currentX, y: currentY, w, h: rowHeight, crop: false });
+                        currentX += w + gap;
+                    });
+                    currentY += rowHeight + gap;
+                });
+                finalHeight = currentY;
+            }
+
+            canvas.width = baseWidth;
+            canvas.height = finalHeight;
+
+            document.getElementById('dimsDisplay').textContent = `${baseWidth} x ${Math.round(finalHeight)} px`;
+            document.getElementById('modeDisplay').textContent = highRes ? 'HD' : 'Preview';
+
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Removed ctx.filter logic
+
+            positions.forEach(pos => {
+                ctx.save();
+                if (radius > 0) {
+                    ctx.beginPath();
+                    ctx.roundRect(pos.x, pos.y, pos.w, pos.h, radius);
+                    ctx.clip();
+                }
+
+                if (pos.crop) {
+                    const imgRatio = pos.img.naturalWidth / pos.img.naturalHeight;
+                    const targetRatio = pos.w / pos.h;
+                    let sx, sy, sWidth, sHeight;
+
+                    if (imgRatio > targetRatio) {
+                        sHeight = pos.img.naturalHeight;
+                        sWidth = sHeight * targetRatio;
+                        sx = (pos.img.naturalWidth - sWidth) / 2;
+                        sy = 0;
+                    } else {
+                        sWidth = pos.img.naturalWidth;
+                        sHeight = sWidth / targetRatio;
+                        sx = 0;
+                        sy = (pos.img.naturalHeight - sHeight) / 2;
+                    }
+                    ctx.drawImage(pos.img, sx, sy, sWidth, sHeight, pos.x, pos.y, pos.w, pos.h);
+                } else {
+                    ctx.drawImage(pos.img, pos.x, pos.y, pos.w, pos.h);
+                }
+                ctx.restore();
+            });
+            ctx.filter = 'none';
+        }
+
+        function updateValueDisplays() {
+            const layout = document.querySelector('input[name="layout"]:checked').value;
+            inputs.countLabel.textContent = layout === 'row' ? "Rows" : "Columns";
+            document.getElementById('colCountVal').textContent = inputs.colCount.value;
+            document.getElementById('gapVal').textContent = inputs.gapSize.value;
+            document.getElementById('radiusVal').textContent = inputs.radiusSize.value;
+        }
+
+        updateValueDisplays();
+        updateUI();
+
+    </script>
+</body>
+</html>
