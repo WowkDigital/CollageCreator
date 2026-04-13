@@ -1,6 +1,7 @@
 import * as ui from './ui.js';
 import { renderCollage } from './collage.js';
 import * as utils from './utils.js';
+import { ImageProcessor } from './arw-processor.js';
 
 // State
 let images = [];
@@ -18,38 +19,57 @@ const triggerRender = () => {
 
 async function handleFiles(e) {
     const files = e.target.files ? [...e.target.files] : [...e.dataTransfer.files];
-    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    // Include .arw files in the selection
+    const eligibleFiles = files.filter(f => 
+        f.type.startsWith('image/') || f.name.toLowerCase().endsWith('.arw')
+    );
     
-    if (imageFiles.length === 0) return;
+    if (eligibleFiles.length === 0) return;
 
     ui.processingIndicator.classList.remove('hidden');
     let loadedCount = 0;
-    const total = imageFiles.length;
+    const total = eligibleFiles.length;
     ui.loaderCount.textContent = `0 / ${total}`;
 
-    for (const file of imageFiles) {
-        await new Promise(resolve => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = async () => {
-                    const thumbImg = await utils.createThumbnail(img);
-                    images.push({
-                        id: Date.now() + Math.random(),
-                        original: img,
-                        thumb: thumbImg, 
-                        src: img.src,
-                        name: file.name,
-                        date: file.lastModified
-                    });
-                    loadedCount++;
-                    ui.loaderCount.textContent = `${loadedCount} / ${total}`;
-                    resolve();
+    for (const file of eligibleFiles) {
+        try {
+            let processedFile = file;
+            let isArw = file.name.toLowerCase().endsWith('.arw');
+
+            if (isArw) {
+                ui.loaderCount.textContent = `Parsing ARW: ${file.name}...`;
+                const jpegBlob = await ImageProcessor.convertArwToJpeg(file);
+                processedFile = new File([jpegBlob], file.name.replace(/\.arw$/i, '.jpg'), { type: 'image/jpeg' });
+            }
+
+            await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = async () => {
+                        const thumbImg = await utils.createThumbnail(img);
+                        images.push({
+                            id: Date.now() + Math.random(),
+                            original: img,
+                            thumb: thumbImg, 
+                            src: img.src,
+                            name: processedFile.name,
+                            date: file.lastModified
+                        });
+                        loadedCount++;
+                        ui.loaderCount.textContent = `${loadedCount} / ${total}`;
+                        resolve();
+                    };
+                    img.onerror = () => reject(new Error('Failed to load image'));
+                    img.src = event.target.result;
                 };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(processedFile);
+            });
+        } catch (err) {
+            console.error('Error processing file:', file.name, err);
+            utils.showToast(`Error: ${file.name}`, 'alert-circle');
+        }
     }
 
     ui.processingIndicator.classList.add('hidden');
