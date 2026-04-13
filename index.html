@@ -104,26 +104,39 @@
         <aside class="order-2 md:order-1 w-full md:w-96 bg-panelDark md:border-r border-t md:border-t-0 border-gray-700 overflow-y-auto flex-1 md:flex-none flex flex-col shadow-[0_-4px_20px_rgba(0,0,0,0.4)] z-20">
             <div class="p-4 md:p-6 space-y-6 md:space-y-8 pb-20 md:pb-6">
                 
-                <!-- Upload Section -->
-                <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-xl p-4 md:p-6 text-center transition-all cursor-pointer hover:border-accentGreen hover:bg-gray-700/30 group relative bg-bgDark/30">
-                    <input type="file" id="imageUpload" multiple accept="image/*" class="hidden">
-                    <div class="flex flex-col items-center justify-center gap-2 pointer-events-none">
-                        <div class="w-10 h-10 md:w-12 md:h-12 bg-gray-700 text-gray-400 rounded-full flex items-center justify-center mb-1 group-hover:scale-110 group-hover:text-accentGreen transition-all">
-                            <i data-lucide="plus" class="w-5 h-5 md:w-6 md:h-6"></i>
-                        </div>
-                        <p class="text-xs md:text-sm font-medium text-gray-300">Add Images</p>
-                    </div>
-                </div>
+                <!-- Images Section (Collapsible) -->
+                <div>
+                     <button id="toggleImagesBtn" class="w-full flex items-center justify-between text-xs md:text-sm font-semibold text-gray-300 mb-3 group">
+                        <span class="flex items-center gap-2">
+                            <i data-lucide="image" class="w-3 h-3 md:w-4 md:h-4 text-accentGreen"></i> 
+                            Images (<span id="imgCountTotal">0</span>)
+                        </span>
+                        <i data-lucide="chevron-down" id="imagesChevron" class="w-4 h-4 text-gray-500 transition-transform duration-300"></i>
+                    </button>
 
-                <!-- Thumbnails List -->
-                <div id="thumbnailsSection" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-[10px] md:text-xs font-semibold text-gray-400 uppercase tracking-wider">Images (<span id="imgCount">0</span>)</h3>
-                        <button id="shuffleBtn" class="text-[10px] md:text-xs text-accentGreen hover:underline flex items-center gap-1">
-                            <i data-lucide="shuffle" class="w-3 h-3"></i> Shuffle
-                         </button>
+                    <div id="imagesManagementWrapper" class="space-y-4 hidden">
+                        <!-- Upload Section -->
+                        <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-xl p-4 md:p-6 text-center transition-all cursor-pointer hover:border-accentGreen hover:bg-gray-700/30 group relative bg-bgDark/30">
+                            <input type="file" id="imageUpload" multiple accept="image/*" class="hidden">
+                            <div class="flex flex-col items-center justify-center gap-2 pointer-events-none">
+                                <div class="w-10 h-10 md:w-12 md:h-12 bg-gray-700 text-gray-400 rounded-full flex items-center justify-center mb-1 group-hover:scale-110 group-hover:text-accentGreen transition-all">
+                                    <i data-lucide="plus" class="w-5 h-5 md:w-6 md:h-6"></i>
+                                </div>
+                                <p class="text-xs md:text-sm font-medium text-gray-300">Add Images</p>
+                            </div>
+                        </div>
+
+                        <!-- Thumbnails List -->
+                        <div id="thumbnailsSection" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-[10px] md:text-xs font-semibold text-gray-400 uppercase tracking-wider">Queue</h3>
+                                <button id="shuffleBtn" class="text-[10px] md:text-xs text-accentGreen hover:underline flex items-center gap-1">
+                                    <i data-lucide="shuffle" class="w-3 h-3"></i> Shuffle
+                                 </button>
+                            </div>
+                            <div id="thumbnailsList" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[250px] p-1 custom-scrollbar"></div>
+                        </div>
                     </div>
-                    <div id="thumbnailsList" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[250px] p-1 custom-scrollbar"></div>
                 </div>
 
                 <!-- Settings -->
@@ -134,23 +147,33 @@
                         <h3 class="text-xs md:text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
                             <i data-lucide="grid" class="w-3 h-3 md:w-4 md:h-4 text-accentGreen"></i> Layout
                         </h3>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-2 gap-2">
                             <label class="cursor-pointer">
                                 <input type="radio" name="layout" value="masonry" class="peer hidden" checked>
-                                <div class="border border-gray-600 rounded-md p-1.5 md:p-2 text-center text-[10px] md:text-xs hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
-                                    Masonry
+                                <div class="border border-gray-600 rounded-md p-2 flex items-center gap-2 hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
+                                    <i data-lucide="layout-panel-top" class="w-4 h-4 text-accentGreen"></i>
+                                    <span class="text-[10px] md:text-xs truncate">Masonry</span>
                                 </div>
                             </label>
                             <label class="cursor-pointer">
                                 <input type="radio" name="layout" value="grid" class="peer hidden">
-                                <div class="border border-gray-600 rounded-md p-1.5 md:p-2 text-center text-[10px] md:text-xs hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
-                                    Grid
+                                <div class="border border-gray-600 rounded-md p-2 flex items-center gap-2 hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
+                                    <i data-lucide="layout-grid" class="w-4 h-4 text-accentGreen"></i>
+                                    <span class="text-[10px] md:text-xs truncate">Grid (Fill)</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="layout" value="square" class="peer hidden">
+                                <div class="border border-gray-600 rounded-md p-2 flex items-center gap-2 hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
+                                    <i data-lucide="square" class="w-4 h-4 text-accentGreen"></i>
+                                    <span class="text-[10px] md:text-xs truncate">Square (Fit)</span>
                                 </div>
                             </label>
                             <label class="cursor-pointer">
                                 <input type="radio" name="layout" value="row" class="peer hidden">
-                                <div class="border border-gray-600 rounded-md p-1.5 md:p-2 text-center text-[10px] md:text-xs hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
-                                    Rows
+                                <div class="border border-gray-600 rounded-md p-2 flex items-center gap-2 hover:bg-gray-700 peer-checked:border-accentGreen peer-checked:text-accentGreen peer-checked:bg-accentGreen/10 transition-all">
+                                    <i data-lucide="rows-3" class="w-4 h-4 text-accentGreen"></i>
+                                    <span class="text-[10px] md:text-xs truncate">Rows</span>
                                 </div>
                             </label>
                         </div>
@@ -200,6 +223,32 @@
                                 <div class="relative w-8 h-8 md:w-6 md:h-6 shrink-0 rounded-full border border-gray-600 overflow-hidden flex items-center justify-center bg-gray-700">
                                      <input type="color" id="bgColor" value="#ffffff" class="absolute inset-0 w-[150%] h-[150%] -top-[25%] -left-[25%] cursor-pointer p-0 border-0 opacity-0">
                                      <i data-lucide="plus" class="w-3 h-3 text-white pointer-events-none"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="gridSettings" class="mt-4 pt-4 border-t border-gray-700 hidden">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-[10px] md:text-xs text-gray-400">Grid Overlay</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex justify-between text-[10px] md:text-xs mb-1 text-gray-400">
+                                        <span>Weight</span>
+                                        <span id="gridWeightVal" class="text-white">0</span>
+                                    </div>
+                                    <input type="range" id="gridWeight" min="0" max="50" value="0" class="w-full">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] md:text-xs mb-1 text-gray-400">
+                                        <span>Color</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <div class="relative w-full h-8 bg-gray-700 rounded-md border border-gray-600 overflow-hidden flex items-center justify-center">
+                                            <input type="color" id="gridColor" value="#4f46e5" class="absolute inset-0 w-[150%] h-[150%] -top-[25%] -left-[25%] cursor-pointer p-0 border-0 opacity-0">
+                                            <div id="gridColorPreview" class="w-4 h-4 rounded-full bg-accent shadow-sm border border-white/20"></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

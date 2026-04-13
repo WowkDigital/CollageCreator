@@ -7,6 +7,8 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
     const radius = parseInt(inputs.radiusSize.value);
     const baseWidth = parseInt(inputs.canvasWidth.value) || 2000;
     const bg = inputs.bgColor.value;
+    const gridWeight = parseInt(inputs.gridWeight.value) || 0;
+    const gridColor = inputs.gridColor.value;
 
     let positions = []; 
     let finalHeight = 0;
@@ -14,7 +16,6 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
     if (layoutMode === 'masonry') {
         const colWidth = (baseWidth - (gap * (count + 1))) / count;
         let colHeights = new Array(count).fill(gap);
-
         images.forEach(imgObj => {
             const img = highRes ? imgObj.original : imgObj.thumb;
             const minColIndex = colHeights.indexOf(Math.min(...colHeights));
@@ -32,7 +33,6 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
     } else if (layoutMode === 'grid') {
         const colWidth = (baseWidth - (gap * (count + 1))) / count;
         const rowHeight = colWidth;
-        
         images.forEach((imgObj, i) => {
             const img = highRes ? imgObj.original : imgObj.thumb;
             const colIndex = i % count;
@@ -43,6 +43,42 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
             
             positions.push({ img, x, y, w: colWidth, h: rowHeight, crop: true });
             finalHeight = Math.max(finalHeight, y + rowHeight + gap);
+        });
+
+    } else if (layoutMode === 'square') {
+        const colWidth = (baseWidth - (gap * (count + 1))) / count;
+        const cellSide = colWidth; // Square container
+        
+        images.forEach((imgObj, i) => {
+            const img = highRes ? imgObj.original : imgObj.thumb;
+            const colIndex = i % count;
+            const rowIndex = Math.floor(i / count);
+            
+            // Container top-left
+            const cx = gap + (colIndex * (cellSide + gap));
+            const cy = gap + (rowIndex * (cellSide + gap));
+            
+            // Calculate image dimensions to fit in square (contain)
+            const imgRatio = img.naturalWidth / img.naturalHeight;
+            let drawW, drawH, dx, dy;
+
+            if (imgRatio > 1) { // Landscape
+                drawW = cellSide;
+                drawH = cellSide / imgRatio;
+                dx = cx;
+                dy = cy + (cellSide - drawH) / 2;
+            } else { // Portrait or Square
+                drawH = cellSide;
+                drawW = cellSide * imgRatio;
+                dx = cx + (cellSide - drawW) / 2;
+                dy = cy;
+            }
+            
+            positions.push({ 
+                img, x: dx, y: dy, w: drawW, h: drawH, crop: false,
+                grid: gridWeight > 0 ? { x: cx, y: cy, w: cellSide, h: cellSide, weight: gridWeight, color: gridColor } : null
+            });
+            finalHeight = Math.max(finalHeight, cy + cellSide + gap);
         });
 
     } else if (layoutMode === 'row') {
@@ -114,6 +150,13 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
             ctx.drawImage(pos.img, pos.x, pos.y, pos.w, pos.h);
         }
         ctx.restore();
+
+        // Draw grid square on top if exists
+        if (pos.grid) {
+            ctx.strokeStyle = pos.grid.color;
+            ctx.lineWidth = pos.grid.weight;
+            ctx.strokeRect(pos.grid.x, pos.grid.y, pos.grid.w, pos.grid.h);
+        }
     });
     ctx.filter = 'none';
 }

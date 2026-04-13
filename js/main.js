@@ -143,6 +143,11 @@ ui.resetBtn.addEventListener('click', () => {
     }
 });
 
+ui.toggleImagesBtn.addEventListener('click', () => {
+    const isHidden = ui.imagesManagementWrapper.classList.toggle('hidden');
+    ui.imagesChevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+});
+
 ui.generateBtn.addEventListener('click', async () => {
     ui.processingIndicator.classList.remove('hidden');
     

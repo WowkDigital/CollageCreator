@@ -11,13 +11,15 @@ export const generateBtn = document.getElementById('generateBtn');
 export const resetBtn = document.getElementById('resetBtn');
 export const shuffleBtn = document.getElementById('shuffleBtn');
 export const infoBar = document.getElementById('infoBar');
-export const imgCountSpan = document.getElementById('imgCount');
+export const imgCountSpan = document.getElementById('imgCountTotal');
 export const processingIndicator = document.getElementById('processingIndicator');
 export const loaderCount = document.getElementById('loaderCount');
 export const resultWrapper = document.getElementById('resultWrapper');
 export const resultsList = document.getElementById('resultsList');
-export const downloadAllBtn = document.getElementById('downloadAllBtn');
 export const backToEditBtn = document.getElementById('backToEditBtn');
+export const toggleImagesBtn = document.getElementById('toggleImagesBtn');
+export const imagesManagementWrapper = document.getElementById('imagesManagementWrapper');
+export const imagesChevron = document.getElementById('imagesChevron');
 
 // Inputs
 export const inputs = {
@@ -29,7 +31,9 @@ export const inputs = {
     bgColor: document.getElementById('bgColor'),
     canvasWidth: document.getElementById('canvasWidth'),
     format: document.getElementById('exportFormat'),
-    maxImages: document.getElementById('maxImagesPerCollage')
+    maxImages: document.getElementById('maxImagesPerCollage'),
+    gridWeight: document.getElementById('gridWeight'),
+    gridColor: document.getElementById('gridColor')
 };
 
 export function updateUI(images) {
@@ -37,14 +41,14 @@ export function updateUI(images) {
     
     if (images.length > 0) {
         settingsSection.classList.remove('opacity-50', 'pointer-events-none');
-        thumbnailsList.parentElement.classList.remove('hidden');
+        document.getElementById('thumbnailsSection').classList.remove('hidden');
         emptyState.classList.add('hidden');
         canvasWrapper.classList.remove('hidden');
         generateBtn.disabled = false;
         infoBar.classList.remove('hidden');
     } else {
         settingsSection.classList.add('opacity-50', 'pointer-events-none');
-        thumbnailsList.parentElement.classList.add('hidden');
+        document.getElementById('thumbnailsSection').classList.add('hidden');
         emptyState.classList.remove('hidden');
         canvasWrapper.classList.add('hidden');
         generateBtn.disabled = true;
@@ -95,4 +99,14 @@ export function updateValueDisplays() {
     document.getElementById('colCountVal').textContent = inputs.colCount.value;
     document.getElementById('gapVal').textContent = inputs.gapSize.value;
     document.getElementById('radiusVal').textContent = inputs.radiusSize.value;
+    
+    // Grid settings visibility
+    const gridSettings = document.getElementById('gridSettings');
+    if (layout === 'square') {
+        gridSettings.classList.remove('hidden');
+        document.getElementById('gridWeightVal').textContent = inputs.gridWeight.value;
+        document.getElementById('gridColorPreview').style.backgroundColor = inputs.gridColor.value;
+    } else {
+        gridSettings.classList.add('hidden');
+    }
 }
