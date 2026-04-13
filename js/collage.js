@@ -5,78 +5,70 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
     const count = parseInt(inputs.colCount.value);
     const gap = parseInt(inputs.gapSize.value);
     const radius = parseInt(inputs.radiusSize.value);
-    const baseWidth = parseInt(inputs.canvasWidth.value) || 2000;
+    const targetLongerEdge = parseInt(inputs.canvasWidth.value) || 2000;
     const bg = inputs.bgColor.value;
-    const gridWeight = parseInt(inputs.gridWeight.value) || 0;
+    const gridWeightInput = parseInt(inputs.gridWeight.value) || 0;
     const gridColor = inputs.gridColor.value;
 
     let positions = []; 
     let finalHeight = 0;
 
+    // Use targetLongerEdge as virtual width first
+    const virtualWidth = targetLongerEdge;
+
     if (layoutMode === 'masonry') {
-        const colWidth = (baseWidth - (gap * (count + 1))) / count;
+        const colWidth = (virtualWidth - (gap * (count + 1))) / count;
         let colHeights = new Array(count).fill(gap);
         images.forEach(imgObj => {
             const img = highRes ? imgObj.original : imgObj.thumb;
             const minColIndex = colHeights.indexOf(Math.min(...colHeights));
             const x = gap + (minColIndex * (colWidth + gap));
             const y = colHeights[minColIndex];
-            
             const aspectRatio = img.naturalHeight / img.naturalWidth;
             const h = colWidth * aspectRatio;
-
             positions.push({ img, x, y, w: colWidth, h, crop: false });
             colHeights[minColIndex] += h + gap;
         });
         finalHeight = Math.max(...colHeights);
 
     } else if (layoutMode === 'grid') {
-        const colWidth = (baseWidth - (gap * (count + 1))) / count;
+        const colWidth = (virtualWidth - (gap * (count + 1))) / count;
         const rowHeight = colWidth;
         images.forEach((imgObj, i) => {
             const img = highRes ? imgObj.original : imgObj.thumb;
             const colIndex = i % count;
             const rowIndex = Math.floor(i / count);
-            
             const x = gap + (colIndex * (colWidth + gap));
             const y = gap + (rowIndex * (rowHeight + gap));
-            
             positions.push({ img, x, y, w: colWidth, h: rowHeight, crop: true });
             finalHeight = Math.max(finalHeight, y + rowHeight + gap);
         });
 
     } else if (layoutMode === 'square') {
-        const colWidth = (baseWidth - (gap * (count + 1))) / count;
-        const cellSide = colWidth; // Square container
-        
+        const colWidth = (virtualWidth - (gap * (count + 1))) / count;
+        const cellSide = colWidth;
         images.forEach((imgObj, i) => {
             const img = highRes ? imgObj.original : imgObj.thumb;
             const colIndex = i % count;
             const rowIndex = Math.floor(i / count);
-            
-            // Container top-left
             const cx = gap + (colIndex * (cellSide + gap));
             const cy = gap + (rowIndex * (cellSide + gap));
-            
-            // Calculate image dimensions to fit in square (contain)
             const imgRatio = img.naturalWidth / img.naturalHeight;
             let drawW, drawH, dx, dy;
-
-            if (imgRatio > 1) { // Landscape
+            if (imgRatio > 1) {
                 drawW = cellSide;
                 drawH = cellSide / imgRatio;
                 dx = cx;
                 dy = cy + (cellSide - drawH) / 2;
-            } else { // Portrait or Square
+            } else {
                 drawH = cellSide;
                 drawW = cellSide * imgRatio;
                 dx = cx + (cellSide - drawW) / 2;
                 dy = cy;
             }
-            
             positions.push({ 
                 img, x: dx, y: dy, w: drawW, h: drawH, crop: false,
-                grid: gridWeight > 0 ? { x: cx, y: cy, w: cellSide, h: cellSide, weight: gridWeight, color: gridColor } : null
+                grid: gridWeightInput > 0 ? { x: cx, y: cy, w: cellSide, h: cellSide, weight: gridWeightInput, color: gridColor } : null
             });
             finalHeight = Math.max(finalHeight, cy + cellSide + gap);
         });
@@ -84,20 +76,16 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
     } else if (layoutMode === 'row') {
         const rows = Array.from({ length: count }, () => []);
         images.forEach((img, i) => rows[i % count].push(img));
-
         let currentY = gap;
         rows.forEach(rowImages => {
             if (rowImages.length === 0) return;
-            
             let totalAspectRatio = 0;
             rowImages.forEach(imgObj => {
                 const img = highRes ? imgObj.original : imgObj.thumb;
                 totalAspectRatio += (img.naturalWidth / img.naturalHeight);
             });
-
-            const usefulWidth = baseWidth - (gap * (rowImages.length + 1));
+            const usefulWidth = virtualWidth - (gap * (rowImages.length + 1));
             const rowHeight = usefulWidth / totalAspectRatio;
-            
             let currentX = gap;
             rowImages.forEach(imgObj => {
                 const img = highRes ? imgObj.original : imgObj.thumb;
@@ -110,30 +98,47 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
         finalHeight = currentY;
     }
 
-    canvas.width = baseWidth;
-    canvas.height = finalHeight;
+    // Longer edge scaling logic
+    let scale = 1.0;
+    if (finalHeight > virtualWidth) {
+        scale = targetLongerEdge / finalHeight;
+    } else {
+        scale = targetLongerEdge / virtualWidth;
+    }
+
+    const finalW = virtualWidth * scale;
+    const finalH = finalHeight * scale;
+
+    canvas.width = finalW;
+    canvas.height = finalH;
 
     const dimsDisplay = document.getElementById('dimsDisplay');
     const modeDisplay = document.getElementById('modeDisplay');
-    if (dimsDisplay) dimsDisplay.textContent = `${baseWidth} x ${Math.round(finalHeight)} px`;
+    if (dimsDisplay) dimsDisplay.textContent = `${Math.round(finalW)} x ${Math.round(finalH)} px`;
     if (modeDisplay) modeDisplay.textContent = highRes ? 'HD' : 'Preview';
 
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    const scaledRadius = radius * scale;
+
     positions.forEach(pos => {
         ctx.save();
-        if (radius > 0) {
+        const px = pos.x * scale;
+        const py = pos.y * scale;
+        const pw = pos.w * scale;
+        const ph = pos.h * scale;
+
+        if (scaledRadius > 0) {
             ctx.beginPath();
-            ctx.roundRect(pos.x, pos.y, pos.w, pos.h, radius);
+            ctx.roundRect(px, py, pw, ph, scaledRadius);
             ctx.clip();
         }
 
         if (pos.crop) {
             const imgRatio = pos.img.naturalWidth / pos.img.naturalHeight;
-            const targetRatio = pos.w / pos.h;
+            const targetRatio = pw / ph;
             let sx, sy, sWidth, sHeight;
-
             if (imgRatio > targetRatio) {
                 sHeight = pos.img.naturalHeight;
                 sWidth = sHeight * targetRatio;
@@ -145,17 +150,16 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
                 sx = 0;
                 sy = (pos.img.naturalHeight - sHeight) / 2;
             }
-            ctx.drawImage(pos.img, sx, sy, sWidth, sHeight, pos.x, pos.y, pos.w, pos.h);
+            ctx.drawImage(pos.img, sx, sy, sWidth, sHeight, px, py, pw, ph);
         } else {
-            ctx.drawImage(pos.img, pos.x, pos.y, pos.w, pos.h);
+            ctx.drawImage(pos.img, px, py, pw, ph);
         }
         ctx.restore();
 
-        // Draw grid square on top if exists
         if (pos.grid) {
             ctx.strokeStyle = pos.grid.color;
-            ctx.lineWidth = pos.grid.weight;
-            ctx.strokeRect(pos.grid.x, pos.grid.y, pos.grid.w, pos.grid.h);
+            ctx.lineWidth = pos.grid.weight * scale;
+            ctx.strokeRect(pos.grid.x * scale, pos.grid.y * scale, pos.grid.w * scale, pos.grid.h * scale);
         }
     });
     ctx.filter = 'none';

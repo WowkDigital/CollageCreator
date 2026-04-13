@@ -10,12 +10,15 @@ export const ctx = canvas.getContext('2d');
 export const generateBtn = document.getElementById('generateBtn');
 export const resetBtn = document.getElementById('resetBtn');
 export const shuffleBtn = document.getElementById('shuffleBtn');
+export const sortAlphaBtn = document.getElementById('sortAlphaBtn');
+export const sortDateBtn = document.getElementById('sortDateBtn');
 export const infoBar = document.getElementById('infoBar');
 export const imgCountSpan = document.getElementById('imgCountTotal');
 export const processingIndicator = document.getElementById('processingIndicator');
 export const loaderCount = document.getElementById('loaderCount');
 export const resultWrapper = document.getElementById('resultWrapper');
 export const resultsList = document.getElementById('resultsList');
+export const downloadAllBtn = document.getElementById('downloadAllBtn');
 export const backToEditBtn = document.getElementById('backToEditBtn');
 export const toggleImagesBtn = document.getElementById('toggleImagesBtn');
 export const imagesManagementWrapper = document.getElementById('imagesManagementWrapper');
@@ -32,6 +35,7 @@ export const inputs = {
     canvasWidth: document.getElementById('canvasWidth'),
     format: document.getElementById('exportFormat'),
     maxImages: document.getElementById('maxImagesPerCollage'),
+    collageCount: document.getElementById('collageCount'),
     gridWeight: document.getElementById('gridWeight'),
     gridColor: document.getElementById('gridColor')
 };

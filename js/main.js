@@ -38,7 +38,9 @@ async function handleFiles(e) {
                         id: Date.now() + Math.random(),
                         original: img,
                         thumb: thumbImg, 
-                        src: img.src
+                        src: img.src,
+                        name: file.name,
+                        date: file.lastModified
                     });
                     loadedCount++;
                     ui.loaderCount.textContent = `${loadedCount} / ${total}`;
@@ -52,6 +54,7 @@ async function handleFiles(e) {
 
     ui.processingIndicator.classList.add('hidden');
     ui.updateUI(images);
+    syncSplitInputs();
     renderThumbnailsList();
     triggerRender();
     ui.fileInput.value = '';
@@ -63,6 +66,7 @@ function renderThumbnailsList() {
         (index) => {
             images.splice(index, 1);
             ui.updateUI(images);
+            syncSplitInputs();
             renderThumbnailsList();
             triggerRender();
         },
@@ -78,8 +82,19 @@ function reorderImages() {
         newImages.push(images[oldIndex]);
     });
     images = newImages;
+    syncSplitInputs();
     renderThumbnailsList();
     triggerRender();
+}
+
+function syncSplitInputs() {
+    const max = parseInt(ui.inputs.maxImages.value) || 0;
+    if (max > 0 && images.length > 0) {
+        ui.inputs.collageCount.value = Math.ceil(images.length / max);
+    } else if (images.length === 0) {
+        ui.inputs.collageCount.value = 0;
+        ui.inputs.maxImages.value = 0;
+    }
 }
 
 // --- Event Listeners ---
@@ -89,6 +104,18 @@ ui.fileInput.addEventListener('change', handleFiles);
 
 ui.shuffleBtn.addEventListener('click', () => {
     images.sort(() => Math.random() - 0.5);
+    renderThumbnailsList();
+    triggerRender();
+});
+
+ui.sortAlphaBtn.addEventListener('click', () => {
+    images.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
+    renderThumbnailsList();
+    triggerRender();
+});
+
+ui.sortDateBtn.addEventListener('click', () => {
+    images.sort((a, b) => a.date - b.date);
     renderThumbnailsList();
     triggerRender();
 });
@@ -119,12 +146,29 @@ dragTargets.forEach(target => {
 // Settings Live Update
 Object.values(ui.inputs).forEach(input => {
     if (input instanceof NodeList) {
-        input.forEach(r => r.addEventListener('change', () => { 
+        input.forEach(r => r.addEventListener('change', (e) => { 
+            // Layout specific presets
+            if (e.target.name === 'layout' && e.target.value === 'square') {
+                ui.inputs.gapSize.value = 0;
+                ui.inputs.radiusSize.value = 0;
+                ui.inputs.gridWeight.value = 5;
+                ui.inputs.gridColor.value = '#000000';
+            }
             ui.updateValueDisplays(); 
             triggerRender(); 
         }));
     } else if (input instanceof HTMLElement) {
-        input.addEventListener('input', () => { 
+        input.addEventListener('input', (e) => { 
+            // Sync splitting logic
+            if (images.length > 0) {
+                if (e.target.id === 'maxImagesPerCollage') {
+                    const max = parseInt(e.target.value) || 0;
+                    ui.inputs.collageCount.value = max > 0 ? Math.ceil(images.length / max) : 0;
+                } else if (e.target.id === 'collageCount') {
+                    const count = parseInt(e.target.value) || 0;
+                    ui.inputs.maxImages.value = count > 0 ? Math.ceil(images.length / count) : 0;
+                }
+            }
             ui.updateValueDisplays(); 
             triggerRender(); 
         });
@@ -132,14 +176,15 @@ Object.values(ui.inputs).forEach(input => {
 });
 
 ui.resetBtn.addEventListener('click', () => {
-    if(confirm('Delete everything and start over?')) {
-        images = [];
+    if (confirm('Delete everything and start over?')) {
+        images.length = 0; // Clear the array in place
         ui.fileInput.value = '';
         ui.resultWrapper.classList.add('hidden');
         ui.canvasWrapper.classList.add('hidden');
         ui.updateUI(images);
         renderThumbnailsList();
         renderCollage(images, false, ui.canvas, ui.ctx, ui.inputs);
+        utils.showToast('Reset successful');
     }
 });
 
@@ -152,9 +197,21 @@ ui.generateBtn.addEventListener('click', async () => {
     ui.processingIndicator.classList.remove('hidden');
     
     const maxPerCollage = parseInt(ui.inputs.maxImages.value) || 0;
+    const fixedCount = parseInt(ui.inputs.collageCount.value) || 0;
     let chunks = [];
     
-    if (maxPerCollage > 0) {
+    if (fixedCount > 0) {
+        // Split as evenly as possible into N collages
+        const parts = Math.min(fixedCount, images.length);
+        let start = 0;
+        for (let i = 0; i < parts; i++) {
+            const size = Math.floor(images.length / parts) + (i < (images.length % parts) ? 1 : 0);
+            if (size > 0) {
+                chunks.push(images.slice(start, start + size));
+                start += size;
+            }
+        }
+    } else if (maxPerCollage > 0) {
         for (let i = 0; i < images.length; i += maxPerCollage) {
             chunks.push(images.slice(i, i + maxPerCollage));
         }
