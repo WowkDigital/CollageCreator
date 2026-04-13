@@ -15,9 +15,8 @@ export const imgCountSpan = document.getElementById('imgCount');
 export const processingIndicator = document.getElementById('processingIndicator');
 export const loaderCount = document.getElementById('loaderCount');
 export const resultWrapper = document.getElementById('resultWrapper');
-export const resultImage = document.getElementById('resultImage');
-export const downloadLinkBtn = document.getElementById('downloadLinkBtn');
-export const copyBtn = document.getElementById('copyBtn');
+export const resultsList = document.getElementById('resultsList');
+export const downloadAllBtn = document.getElementById('downloadAllBtn');
 export const backToEditBtn = document.getElementById('backToEditBtn');
 
 // Inputs
@@ -29,7 +28,8 @@ export const inputs = {
     radiusSize: document.getElementById('radiusSize'),
     bgColor: document.getElementById('bgColor'),
     canvasWidth: document.getElementById('canvasWidth'),
-    format: document.getElementById('exportFormat')
+    format: document.getElementById('exportFormat'),
+    maxImages: document.getElementById('maxImagesPerCollage')
 };
 
 export function updateUI(images) {

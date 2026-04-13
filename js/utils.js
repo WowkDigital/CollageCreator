@@ -47,3 +47,24 @@ export function unhighlight(dropZone, emptyState) {
         emptyState.style.backgroundColor = 'transparent';
     }
 }
+
+export function showToast(message, icon = 'check') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 text-accentGreen"></i> <span>${message}</span>`;
+    
+    container.appendChild(toast);
+    lucide.createIcons();
+
+    setTimeout(() => {
+        toast.remove();
+        if (container.children.length === 0) container.remove();
+    }, 3000);
+}

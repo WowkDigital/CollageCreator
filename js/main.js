@@ -145,44 +145,119 @@ ui.resetBtn.addEventListener('click', () => {
 
 ui.generateBtn.addEventListener('click', async () => {
     ui.processingIndicator.classList.remove('hidden');
-    ui.loaderCount.textContent = "Generating high quality...";
     
-    await new Promise(r => setTimeout(r, 50));
-    await renderCollage(images, true, ui.canvas, ui.ctx, ui.inputs);
+    const maxPerCollage = parseInt(ui.inputs.maxImages.value) || 0;
+    let chunks = [];
     
-    const format = ui.inputs.format.value;
-    const quality = format === 'image/jpeg' ? 0.95 : undefined;
-    const dataUrl = ui.canvas.toDataURL(format, quality);
+    if (maxPerCollage > 0) {
+        for (let i = 0; i < images.length; i += maxPerCollage) {
+            chunks.push(images.slice(i, i + maxPerCollage));
+        }
+    } else {
+        chunks = [images];
+    }
+
+    ui.resultsList.innerHTML = '';
+    const generatedDataUrls = [];
+
+    for (let index = 0; index < chunks.length; index++) {
+        const chunk = chunks[index];
+        ui.loaderCount.textContent = `Generating collage ${index + 1} of ${chunks.length}...`;
+        
+        await new Promise(r => setTimeout(r, 50));
+        await renderCollage(chunk, true, ui.canvas, ui.ctx, ui.inputs);
+        
+        const format = ui.inputs.format.value;
+        const quality = format === 'image/jpeg' ? 0.95 : undefined;
+        const dataUrl = ui.canvas.toDataURL(format, quality);
+        generatedDataUrls.push(dataUrl);
+
+        // UI for each result
+        const resultItem = document.createElement('div');
+        resultItem.className = 'flex flex-col items-center gap-2 animate-in fade-in zoom-in duration-500 w-full mb-4';
+        
+        const squareWrapper = document.createElement('div');
+        squareWrapper.className = 'w-full aspect-square bg-bgDark rounded-xl border border-gray-700 overflow-hidden flex items-center justify-center result-image-container relative group';
+
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.className = 'w-full h-full object-contain cursor-zoom-in transition-transform duration-500 group-hover:scale-105';
+        img.onclick = () => window.open(dataUrl, '_blank');
+        
+        squareWrapper.appendChild(img);
+        
+        const label = document.createElement('span');
+        label.className = 'text-[10px] uppercase tracking-wider text-gray-400 font-semibold mt-1';
+        label.textContent = `Collage #${index + 1} • ${chunk.length} imgs`;
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'flex gap-2 mt-1';
+
+        const dlBtn = document.createElement('button');
+        dlBtn.className = 'bg-accent/20 hover:bg-accent text-accentGreen hover:text-white px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5 border border-accent/30';
+        dlBtn.innerHTML = '<i data-lucide="download" class="w-3 h-3"></i> Save';
+        dlBtn.onclick = () => {
+            const link = document.createElement('a');
+            link.download = `collage-${index + 1}-${Date.now()}.${format.split('/')[1]}`;
+            link.href = dataUrl;
+            link.click();
+        };
+
+        const cpBtn = document.createElement('button');
+        cpBtn.className = 'bg-gray-700/50 hover:bg-gray-700 text-gray-300 hover:text-white px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5 border border-gray-600';
+        cpBtn.innerHTML = '<i data-lucide="copy" class="w-3 h-3"></i> Copy';
+        cpBtn.onclick = async () => {
+            try {
+                // To ensure maximum clipboard compatibility, we always copy as PNG
+                const imgTemp = new Image();
+                imgTemp.src = dataUrl;
+                await imgTemp.decode();
+                
+                const canvasTemp = document.createElement('canvas');
+                canvasTemp.width = imgTemp.naturalWidth;
+                canvasTemp.height = imgTemp.naturalHeight;
+                const ctxTemp = canvasTemp.getContext('2d');
+                ctxTemp.drawImage(imgTemp, 0, 0);
+                
+                canvasTemp.toBlob(async (blob) => {
+                    if (navigator.clipboard && window.ClipboardItem) {
+                        const data = [new ClipboardItem({ 'image/png': blob })];
+                        await navigator.clipboard.write(data);
+                        utils.showToast('Copied to clipboard!');
+                    } else {
+                        utils.showToast('Clipboard API not supported here.', 'alert-circle');
+                    }
+                }, 'image/png');
+            } catch (err) { 
+                console.error(err); 
+                utils.showToast('Copy failed. Check permissions.', 'alert-circle');
+            }
+        };
+
+        btnRow.appendChild(dlBtn);
+        btnRow.appendChild(cpBtn);
+        resultItem.appendChild(squareWrapper);
+        resultItem.appendChild(label);
+        resultItem.appendChild(btnRow);
+        ui.resultsList.appendChild(resultItem);
+    }
     
-    ui.resultImage.src = dataUrl;
+    lucide.createIcons();
+
     ui.canvasWrapper.classList.add('hidden');
     ui.resultWrapper.classList.remove('hidden');
     ui.infoBar.classList.add('hidden');
     
-    ui.downloadLinkBtn.onclick = () => {
-        const link = document.createElement('a');
-        link.download = `collage-${Date.now()}.${format.split('/')[1]}`;
-        link.href = dataUrl;
-        link.click();
-    };
-
-    ui.copyBtn.onclick = async () => {
-        ui.canvas.toBlob(async (blob) => {
-            if (!blob) return;
-            try {
-                const item = new ClipboardItem({ 'image/png': blob });
-                await navigator.clipboard.write([item]);
-                const originalText = ui.copyBtn.innerHTML;
-                ui.copyBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Copied!';
-                lucide.createIcons();
-                setTimeout(() => {
-                    ui.copyBtn.innerHTML = originalText;
-                    lucide.createIcons();
-                }, 2000);
-            } catch (err) {
-                console.error(err);
-            }
-        }, 'image/png');
+    ui.downloadAllBtn.onclick = () => {
+        generatedDataUrls.forEach((url, i) => {
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.download = `collage-${i + 1}-${Date.now()}.${ui.inputs.format.value.split('/')[1]}`;
+                link.href = url;
+                link.click();
+            }, i * 300); // Small delay to avoid browser blocking multiple downloads
+        });
+        utils.showToast(`Downloading ${generatedDataUrls.length} images...`);
     };
 
     ui.processingIndicator.classList.add('hidden');
