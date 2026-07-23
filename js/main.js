@@ -77,7 +77,11 @@ async function handleFiles(e) {
     syncSplitInputs();
     renderThumbnailsList();
     triggerRender();
+    if (loadedCount > 0) {
+        utils.showToast(`Loaded ${loadedCount} ${loadedCount === 1 ? 'image' : 'images'}`, 'image');
+    }
     ui.fileInput.value = '';
+    if (ui.emptyStateFileInput) ui.emptyStateFileInput.value = '';
 }
 
 function renderThumbnailsList() {
@@ -90,7 +94,12 @@ function renderThumbnailsList() {
             renderThumbnailsList();
             triggerRender();
         },
-        null,
+        (fromIndex, toIndex) => {
+            const [movedItem] = images.splice(fromIndex, 1);
+            images.splice(toIndex, 0, movedItem);
+            renderThumbnailsList();
+            triggerRender();
+        },
         reorderImages
     );
 }
@@ -119,6 +128,52 @@ function syncSplitInputs() {
 
 // --- Event Listeners ---
 
+if (ui.toggleMobilePreviewBtn) {
+    const updatePreviewState = (hide) => {
+        if (hide) {
+            ui.previewMain.classList.add('hidden');
+            if (ui.mobileShowPreviewBanner) ui.mobileShowPreviewBanner.classList.remove('hidden');
+            ui.togglePreviewText.textContent = 'Show Preview';
+            ui.togglePreviewIcon.setAttribute('data-lucide', 'eye');
+        } else {
+            ui.previewMain.classList.remove('hidden');
+            if (ui.mobileShowPreviewBanner) ui.mobileShowPreviewBanner.classList.add('hidden');
+            ui.togglePreviewText.textContent = 'Hide Preview';
+            ui.togglePreviewIcon.setAttribute('data-lucide', 'eye-off');
+        }
+        lucide.createIcons();
+    };
+
+    let isPreviewHidden = false;
+    ui.toggleMobilePreviewBtn.addEventListener('click', () => {
+        isPreviewHidden = !isPreviewHidden;
+        updatePreviewState(isPreviewHidden);
+    });
+
+    if (ui.showMobilePreviewBtn) {
+        ui.showMobilePreviewBtn.addEventListener('click', () => {
+            isPreviewHidden = false;
+            updatePreviewState(false);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+}
+
+if (ui.emptyState) {
+    ui.emptyState.addEventListener('click', (e) => {
+        // Trigger file input dialog
+        if (ui.emptyStateFileInput) {
+            ui.emptyStateFileInput.click();
+        } else {
+            ui.fileInput.click();
+        }
+    });
+}
+
+if (ui.emptyStateFileInput) {
+    ui.emptyStateFileInput.addEventListener('change', handleFiles);
+}
+
 ui.dropZone.addEventListener('click', () => ui.fileInput.click());
 ui.fileInput.addEventListener('change', handleFiles);
 
@@ -126,18 +181,21 @@ ui.shuffleBtn.addEventListener('click', () => {
     images.sort(() => Math.random() - 0.5);
     renderThumbnailsList();
     triggerRender();
+    utils.showToast('Shuffled images', 'shuffle');
 });
 
 ui.sortAlphaBtn.addEventListener('click', () => {
     images.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
     renderThumbnailsList();
     triggerRender();
+    utils.showToast('Sorted A-Z', 'sort-asc');
 });
 
 ui.sortDateBtn.addEventListener('click', () => {
     images.sort((a, b) => a.date - b.date);
     renderThumbnailsList();
     triggerRender();
+    utils.showToast('Sorted by date', 'calendar');
 });
 
 window.setBg = (color) => {
@@ -147,6 +205,7 @@ window.setBg = (color) => {
 
 const dragTargets = [ui.dropZone, document.body, ui.emptyState];
 dragTargets.forEach(target => {
+    if (!target) return;
     target.addEventListener('dragenter', utils.preventDefaults, false);
     target.addEventListener('dragover', (e) => {
         utils.preventDefaults(e);
@@ -154,7 +213,10 @@ dragTargets.forEach(target => {
     }, false);
     target.addEventListener('dragleave', (e) => {
         utils.preventDefaults(e);
-        utils.unhighlight(ui.dropZone, ui.emptyState);
+        // Only unhighlight when leaving window or main element
+        if (e.relatedTarget === null || e.target === document.body || e.target === ui.emptyState) {
+            utils.unhighlight(ui.dropZone, ui.emptyState);
+        }
     }, false);
     target.addEventListener('drop', (e) => {
         utils.preventDefaults(e);

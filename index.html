@@ -58,25 +58,36 @@
     <div class="flex flex-col md:flex-row flex-1 overflow-hidden relative">
         
         <!-- Preview Area (Top on Mobile, Right on Desktop) -->
-        <main class="order-1 md:order-2 flex-1 bg-bgDark relative flex flex-col items-center justify-center p-2 md:p-4 overflow-hidden mobile-preview-height md:h-full z-10 border-b md:border-b-0 md:border-l border-gray-700">
+        <main id="previewMain" class="order-1 md:order-2 flex-1 bg-bgDark relative flex flex-col items-center justify-center p-2 md:p-4 overflow-hidden h-[38vh] min-h-[200px] md:h-full z-10 border-b md:border-b-0 md:border-l border-gray-700 transition-all duration-300">
             
-            <!-- Info Bar -->
-            <div id="infoBar" class="absolute top-4 bg-panelDark/90 backdrop-blur shadow-lg border border-gray-700 px-3 py-1.5 rounded-full text-[10px] md:text-xs font-medium text-gray-300 hidden z-20 flex items-center gap-2">
-                <span id="dimsDisplay">0 x 0 px</span>
-                <span class="w-px h-3 bg-gray-600 mx-1"></span>
-                <span id="modeDisplay" class="text-gray-400">Preview</span>
+            <!-- Info Bar / Mobile Toggle Bar -->
+            <div class="absolute top-2 left-2 right-2 md:top-4 md:left-auto md:right-auto z-20 flex justify-between md:justify-center items-center pointer-events-none">
+                <div id="infoBar" class="bg-panelDark/90 backdrop-blur shadow-lg border border-gray-700 px-3 py-1.5 rounded-full text-[10px] md:text-xs font-medium text-gray-300 hidden flex items-center gap-2 pointer-events-auto">
+                    <span id="dimsDisplay">0 x 0 px</span>
+                    <span class="w-px h-3 bg-gray-600 mx-1"></span>
+                    <span id="modeDisplay" class="text-gray-400">Preview</span>
+                </div>
+                <!-- Mobile Toggle Preview Button -->
+                <button id="toggleMobilePreviewBtn" class="md:hidden bg-panelDark/90 backdrop-blur border border-gray-700 text-gray-300 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-md hover:text-white pointer-events-auto ml-auto">
+                    <i data-lucide="eye-off" id="togglePreviewIcon" class="w-3.5 h-3.5 text-accentGreen"></i>
+                    <span id="togglePreviewText">Hide Preview</span>
+                </button>
             </div>
 
             <!-- Canvas/Image Container -->
             <div class="relative w-full h-full flex flex-col items-center justify-center flex-1 min-h-0">
                 
                 <!-- Empty State (Drop Zone) -->
-                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center z-10 p-6 text-center border-2 border-transparent border-dashed rounded-xl transition-all">
-                    <div class="bg-gray-700/30 p-4 rounded-full mb-3 ring-1 ring-gray-600/50 pointer-events-none">
-                        <i data-lucide="image-plus" class="w-8 h-8 md:w-10 md:h-10 text-gray-500"></i>
+                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4 md:p-6 text-center border-2 border-dashed border-gray-600/60 hover:border-accentGreen/80 hover:bg-accentGreen/5 rounded-2xl transition-all cursor-pointer group m-2 md:m-4">
+                    <input type="file" id="emptyStateFileInput" multiple accept="image/*" class="hidden">
+                    <div class="bg-gray-700/40 p-4 md:p-5 rounded-full mb-3 ring-1 ring-gray-600/50 group-hover:scale-110 group-hover:bg-accentGreen/20 group-hover:ring-accentGreen/50 transition-all pointer-events-none">
+                        <i data-lucide="upload-cloud" class="w-8 h-8 md:w-12 md:h-12 text-gray-400 group-hover:text-accentGreen transition-colors"></i>
                     </div>
-                    <h3 class="text-gray-200 font-medium text-lg pointer-events-none">Start Here</h3>
-                    <p class="text-gray-500 text-xs md:text-sm mt-1 max-w-[250px] pointer-events-none">Drag and drop images here or use the button in the panel.</p>
+                    <h3 class="text-gray-200 font-semibold text-base md:text-xl group-hover:text-accentGreen transition-colors pointer-events-none">Drop images here or click to browse</h3>
+                    <p class="text-gray-400 text-xs md:text-sm mt-1.5 max-w-xs pointer-events-none">Supports JPG, PNG, WEBP and Sony ARW (RAW) files</p>
+                    <button class="mt-4 px-4 py-2 bg-accent/80 group-hover:bg-accent text-white text-xs md:text-sm font-medium rounded-lg shadow-md transition-all flex items-center gap-2 pointer-events-none">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Add Images
+                    </button>
                 </div>
 
                 <!-- Canvas Wrapper -->
@@ -108,6 +119,13 @@
 
         <!-- Sidebar (Controls) -->
         <aside class="order-2 md:order-1 w-full md:w-96 bg-panelDark md:border-r border-t md:border-t-0 border-gray-700 overflow-y-auto flex-1 md:flex-none flex flex-col shadow-[0_-4px_20px_rgba(0,0,0,0.4)] z-20">
+            <!-- Mobile Sticky Banner to Show Preview when Hidden -->
+            <div id="mobileShowPreviewBanner" class="hidden md:!hidden bg-bgDark/90 border-b border-gray-700 p-2 text-center sticky top-0 z-30 backdrop-blur-sm">
+                <button id="showMobilePreviewBtn" class="w-full bg-accent/20 border border-accent text-accentGreen hover:bg-accent/30 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+                    <i data-lucide="eye" class="w-4 h-4"></i> Show Collage Preview
+                </button>
+            </div>
+
             <div class="p-4 md:p-6 space-y-6 md:space-y-8 pb-20 md:pb-6">
                 
                 <!-- Images Section (Collapsible) -->
@@ -137,18 +155,18 @@
                             <div class="flex justify-between items-center mb-2">
                                 <h3 class="text-[10px] md:text-xs font-semibold text-gray-400 uppercase tracking-wider">Queue</h3>
                                 <div class="flex items-center gap-2">
-                                    <button id="shuffleBtn" class="text-accentGreen hover:text-white transition-colors" title="Shuffle">
-                                        <i data-lucide="shuffle" class="w-3 h-3 md:w-4 md:h-4"></i>
+                                    <button id="shuffleBtn" class="text-accentGreen hover:text-white transition-colors p-1 rounded hover:bg-gray-700" title="Shuffle">
+                                        <i data-lucide="shuffle" class="w-3.5 h-3.5 md:w-4 md:h-4"></i>
                                     </button>
-                                    <button id="sortAlphaBtn" class="text-gray-400 hover:text-accentGreen transition-colors" title="Sort A-Z">
-                                        <i data-lucide="sort-asc" class="w-3 h-3 md:w-4 md:h-4"></i>
+                                    <button id="sortAlphaBtn" class="text-gray-400 hover:text-accentGreen transition-colors p-1 rounded hover:bg-gray-700" title="Sort A-Z">
+                                        <i data-lucide="sort-asc" class="w-3.5 h-3.5 md:w-4 md:h-4"></i>
                                     </button>
-                                    <button id="sortDateBtn" class="text-gray-400 hover:text-accentGreen transition-colors" title="Sort by Date">
-                                        <i data-lucide="calendar" class="w-3 h-3 md:w-4 md:h-4"></i>
+                                    <button id="sortDateBtn" class="text-gray-400 hover:text-accentGreen transition-colors p-1 rounded hover:bg-gray-700" title="Sort by Date">
+                                        <i data-lucide="calendar" class="w-3.5 h-3.5 md:w-4 md:h-4"></i>
                                     </button>
                                 </div>
                             </div>
-                            <div id="thumbnailsList" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[250px] p-1 custom-scrollbar"></div>
+                            <div id="thumbnailsList" class="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto max-h-[350px] p-1 custom-scrollbar"></div>
                         </div>
                     </div>
                 </div>

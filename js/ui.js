@@ -1,6 +1,6 @@
-// --- DOM Elements ---
 export const dropZone = document.getElementById('dropZone');
 export const emptyState = document.getElementById('emptyState');
+export const emptyStateFileInput = document.getElementById('emptyStateFileInput');
 export const fileInput = document.getElementById('imageUpload');
 export const thumbnailsList = document.getElementById('thumbnailsList');
 export const settingsSection = document.getElementById('settingsSection');
@@ -23,6 +23,12 @@ export const backToEditBtn = document.getElementById('backToEditBtn');
 export const toggleImagesBtn = document.getElementById('toggleImagesBtn');
 export const imagesManagementWrapper = document.getElementById('imagesManagementWrapper');
 export const imagesChevron = document.getElementById('imagesChevron');
+export const previewMain = document.getElementById('previewMain');
+export const toggleMobilePreviewBtn = document.getElementById('toggleMobilePreviewBtn');
+export const togglePreviewIcon = document.getElementById('togglePreviewIcon');
+export const togglePreviewText = document.getElementById('togglePreviewText');
+export const mobileShowPreviewBanner = document.getElementById('mobileShowPreviewBanner');
+export const showMobilePreviewBtn = document.getElementById('showMobilePreviewBtn');
 
 // Inputs
 export const inputs = {
@@ -61,11 +67,11 @@ export function updateUI(images) {
     }
 }
 
-export function renderThumbnails(images, deleteCallback, startDragCallback, endDragCallback) {
+export function renderThumbnails(images, deleteCallback, moveCallback, endDragCallback) {
     thumbnailsList.innerHTML = '';
     images.forEach((imgObj, index) => {
         const div = document.createElement('div');
-        div.className = 'relative w-full aspect-square rounded-md overflow-hidden cursor-move border border-gray-600 bg-gray-800 thumbnail-item';
+        div.className = 'relative w-full aspect-square rounded-lg overflow-hidden cursor-move border border-gray-600 bg-gray-800 thumbnail-item group shadow-sm';
         div.draggable = true;
         div.dataset.index = index;
 
@@ -73,20 +79,67 @@ export function renderThumbnails(images, deleteCallback, startDragCallback, endD
         thumb.src = imgObj.thumb.src;
         thumb.className = 'w-full h-full object-cover pointer-events-none';
         
-        const btn = document.createElement('button');
-        btn.className = 'absolute top-0 right-0 bg-black/60 text-white p-1 hover:bg-red-500 transition-colors backdrop-blur-sm rounded-bl-md';
-        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
-        btn.onclick = (e) => {
+        // Badge index
+        const indexBadge = document.createElement('span');
+        indexBadge.className = 'absolute top-1 left-1 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm pointer-events-none';
+        indexBadge.textContent = index + 1;
+
+        // Action Toolbar Overlay
+        const actionOverlay = document.createElement('div');
+        actionOverlay.className = 'absolute inset-0 bg-black/40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1 pointer-events-none';
+
+        // Delete button top right
+        const topRow = document.createElement('div');
+        topRow.className = 'flex justify-end';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'bg-red-600/90 text-white p-1.5 hover:bg-red-600 transition-colors backdrop-blur-sm rounded-md shadow pointer-events-auto flex items-center justify-center';
+        deleteBtn.title = 'Remove image';
+        deleteBtn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i>';
+        deleteBtn.onclick = (e) => {
             e.stopPropagation();
             deleteCallback(index);
         };
+        topRow.appendChild(deleteBtn);
+
+        // Move Controls bottom row
+        const bottomRow = document.createElement('div');
+        bottomRow.className = 'flex justify-between items-center gap-1 mt-auto';
+
+        // Move left / up
+        const moveLeftBtn = document.createElement('button');
+        moveLeftBtn.className = `bg-gray-900/80 text-white p-1.5 hover:bg-accentGreen hover:text-black transition-colors rounded-md backdrop-blur-sm pointer-events-auto flex items-center justify-center ${index === 0 ? 'opacity-30 cursor-not-allowed' : ''}`;
+        moveLeftBtn.title = 'Move left/up';
+        moveLeftBtn.disabled = index === 0;
+        moveLeftBtn.innerHTML = '<i data-lucide="chevron-left" class="w-4 h-4"></i>';
+        moveLeftBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (index > 0 && moveCallback) moveCallback(index, index - 1);
+        };
+
+        // Move right / down
+        const moveRightBtn = document.createElement('button');
+        moveRightBtn.className = `bg-gray-900/80 text-white p-1.5 hover:bg-accentGreen hover:text-black transition-colors rounded-md backdrop-blur-sm pointer-events-auto flex items-center justify-center ${index === images.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}`;
+        moveRightBtn.title = 'Move right/down';
+        moveRightBtn.disabled = index === images.length - 1;
+        moveRightBtn.innerHTML = '<i data-lucide="chevron-right" class="w-4 h-4"></i>';
+        moveRightBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (index < images.length - 1 && moveCallback) moveCallback(index, index + 1);
+        };
+
+        bottomRow.appendChild(moveLeftBtn);
+        bottomRow.appendChild(moveRightBtn);
+
+        actionOverlay.appendChild(topRow);
+        actionOverlay.appendChild(bottomRow);
 
         div.appendChild(thumb);
-        div.appendChild(btn);
+        div.appendChild(indexBadge);
+        div.appendChild(actionOverlay);
         
         div.addEventListener('dragstart', () => {
             div.classList.add('dragging');
-            if (startDragCallback) startDragCallback(div);
         });
         div.addEventListener('dragend', () => {
             div.classList.remove('dragging');
@@ -95,6 +148,7 @@ export function renderThumbnails(images, deleteCallback, startDragCallback, endD
         
         thumbnailsList.appendChild(div);
     });
+    lucide.createIcons();
 }
 
 export function updateValueDisplays() {
