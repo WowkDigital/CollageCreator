@@ -74,7 +74,7 @@ export function classifyImageToBlock(item, cols, origIndex = 0, highRes = false)
  * Evaluates discrete grid layout for given modular width (cols).
  * Returns placed blocks, dimensions, empty cells, and bottom raggedness.
  */
-export function solveModularPacking(items, cols, highRes = false, deepOptimization = false) {
+export function solveModularPacking(items, cols, highRes = false, deepOptimization = false, deadline = null, maxIterations = 10000) {
     if (!items || items.length === 0) return null;
 
     // Classify each item into modular block dimensions (wu, hu)
@@ -88,30 +88,39 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
         effectiveCols = Math.max(maxBlockW, totalNominalWidth);
     }
 
+    // Preallocated flat grid buffer to avoid array allocation overhead in simulated search loops
+    const GRID_MAX_COLS = 24;
+    const GRID_MAX_ROWS = 1000;
+    const gridBuffer = new Uint8Array(GRID_MAX_COLS * GRID_MAX_ROWS);
+
     const solvePacking = (orderList) => {
-        const grid = [];
+        gridBuffer.fill(0);
+        let maxRow = 0;
+
         const isOccupied = (gx, gy) => {
-            if (!grid[gy]) return false;
-            return !!grid[gy][gx];
+            if (gy >= GRID_MAX_ROWS || gx >= effectiveCols) return true;
+            return gridBuffer[gy * GRID_MAX_COLS + gx] === 1;
         };
+
         const canPlace = (gx, gy, w, h) => {
             if (gx + w > effectiveCols) return false;
             for (let y = gy; y < gy + h; y++) {
+                const rowOffset = y * GRID_MAX_COLS;
                 for (let x = gx; x < gx + w; x++) {
-                    if (isOccupied(x, y)) return false;
+                    if (gridBuffer[rowOffset + x] === 1) return false;
                 }
             }
             return true;
         };
+
         const occupy = (gx, gy, w, h) => {
             for (let y = gy; y < gy + h; y++) {
-                while (grid.length <= y) {
-                    grid.push(new Array(effectiveCols).fill(false));
-                }
+                const rowOffset = y * GRID_MAX_COLS;
                 for (let x = gx; x < gx + w; x++) {
-                    grid[y][x] = true;
+                    gridBuffer[rowOffset + x] = 1;
                 }
             }
+            if (gy + h > maxRow) maxRow = gy + h;
         };
 
         const unplaced = [...orderList];
@@ -123,8 +132,9 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
             safetyLimit++;
             let targetX = -1, targetY = -1;
             for (let y = curY; y < curY + 200; y++) {
+                const rowOffset = y * GRID_MAX_COLS;
                 for (let x = 0; x < effectiveCols; x++) {
-                    if (!isOccupied(x, y)) {
+                    if (gridBuffer[rowOffset + x] === 0) {
                         targetX = x;
                         targetY = y;
                         break;
@@ -135,13 +145,14 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
 
             if (targetX === -1) {
                 targetX = 0;
-                targetY = grid.length;
+                targetY = maxRow;
             }
 
             curY = targetY;
 
             let freeSpan = 0;
-            while (targetX + freeSpan < effectiveCols && !isOccupied(targetX + freeSpan, targetY)) {
+            const curRowOffset = targetY * GRID_MAX_COLS;
+            while (targetX + freeSpan < effectiveCols && gridBuffer[curRowOffset + targetX + freeSpan] === 0) {
                 freeSpan++;
             }
 
@@ -179,11 +190,12 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
             }
         }
 
-        const totalRows = Math.max(1, grid.length);
+        const totalRows = Math.max(1, maxRow);
         let emptyCells = 0;
         for (let y = 0; y < totalRows; y++) {
+            const rowOffset = y * GRID_MAX_COLS;
             for (let x = 0; x < effectiveCols; x++) {
-                if (!grid[y] || !grid[y][x]) emptyCells++;
+                if (gridBuffer[rowOffset + x] === 0) emptyCells++;
             }
         }
 
@@ -202,7 +214,7 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
         });
 
         const score = (totalRows * 1000) + (emptyCells * 4000) + (raggedness * 800) + (orderDist * 3);
-        return { placed, grid, totalRows, emptyCells, raggedness, score, effectiveCols };
+        return { placed, totalRows, emptyCells, raggedness, score, effectiveCols };
     };
 
     let bestCandidate = solvePacking(rawBlocks);
@@ -255,30 +267,52 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
         if (candPaired.score < bestCandidate.score) bestCandidate = candPaired;
     }
 
-    // Dynamic Multi-Iteration Perturbation / Simulated Search
-    // Starting from 30 photos, we run heavier calculations (120+ iterations), and with deepOptimization up to 300+ iterations
-    if (rawBlocks.length > 3 && (bestCandidate.emptyCells > 0 || bestCandidate.raggedness > 0 || deepOptimization)) {
-        let baseIterations = 30;
-        if (rawBlocks.length >= 30) {
-            baseIterations = deepOptimization ? 350 : 150;
-        } else if (rawBlocks.length >= 15) {
-            baseIterations = deepOptimization ? 200 : 70;
-        } else {
-            baseIterations = deepOptimization ? 100 : 35;
-        }
+    // Fast return if initial heuristics already found a perfect gapless layout with 0 raggedness
+    if (bestCandidate.emptyCells === 0 && bestCandidate.raggedness === 0) {
+        bestCandidate.iterationsUsed = 0;
+        return bestCandidate;
+    }
 
-        let seed = (rawBlocks.length * 997) + (effectiveCols * 31) + (deepOptimization ? 7777 : 0);
+    // Simulated Annealing Hill-Climbing Search (capped at maxIterations or strict time deadline)
+    if (rawBlocks.length > 3) {
+        const orderHash = rawBlocks.reduce((acc, b, i) => (acc * 31 + (b.origIndex || 0) + i) % 1000007, 0);
+        let seed = (rawBlocks.length * 997) + (effectiveCols * 31) + orderHash + (deepOptimization ? 7777 : 0);
         const seededRandom = () => {
             seed = (seed * 1664525 + 1013904223) % 4294967296;
             return seed / 4294967296;
         };
 
-        const topOrder = [...bestCandidate.placed].map(p => rawBlocks[p.origIndex] || p);
+        let topOrder = [...bestCandidate.placed].map(p => rawBlocks[p.origIndex] || p);
+        let iterationsUsed = 0;
+        let stagnantCount = 0;
 
-        for (let t = 0; t < baseIterations; t++) {
+        for (let t = 0; t < maxIterations; t++) {
+            iterationsUsed = t + 1;
+            stagnantCount++;
+
+            // Escape local minima: If stuck for 50 iterations without finding a better layout score, kick search state
+            if (stagnantCount > 50) {
+                stagnantCount = 0;
+                const kickCount = Math.floor(topOrder.length * 0.35);
+                for (let k = 0; k < kickCount; k++) {
+                    const k1 = Math.floor(seededRandom() * topOrder.length);
+                    const k2 = Math.floor(seededRandom() * topOrder.length);
+                    if (k1 !== k2) {
+                        const tmp = topOrder[k1];
+                        topOrder[k1] = topOrder[k2];
+                        topOrder[k2] = tmp;
+                    }
+                }
+            }
+
+            // Strict deadline check every 25 iterations
+            if (deadline && (t % 25 === 0) && performance.now() >= deadline) {
+                break;
+            }
+
             const perturbed = [...topOrder];
-            // Multi-swap strategy with variable temperatures
-            const swapCount = Math.max(1, Math.floor(rawBlocks.length * (t % 2 === 0 ? 0.12 : 0.25)));
+            // Variable swap temperature
+            const swapCount = Math.max(1, Math.floor(rawBlocks.length * (t % 2 === 0 ? 0.08 : (t % 5 === 0 ? 0.20 : 0.04))));
             for (let s = 0; s < swapCount; s++) {
                 const i1 = Math.floor(seededRandom() * perturbed.length);
                 const i2 = Math.floor(seededRandom() * perturbed.length);
@@ -288,12 +322,21 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
                     perturbed[i2] = tmp;
                 }
             }
+
             const candRand = solvePacking(perturbed);
             if (candRand.score < bestCandidate.score) {
                 bestCandidate = candRand;
-                if (bestCandidate.emptyCells === 0 && bestCandidate.raggedness === 0 && !deepOptimization) break;
+                stagnantCount = 0;
+                topOrder = [...candRand.placed].map(p => rawBlocks[p.origIndex] || p);
+
+                // EARLY STOPPING: Stop immediately as soon as a 100% gapless solution with flat bottom is found!
+                if (bestCandidate.emptyCells === 0 && bestCandidate.raggedness === 0) {
+                    break;
+                }
             }
         }
+
+        bestCandidate.iterationsUsed = iterationsUsed;
     }
 
     // Tolerance gap absorption
@@ -324,17 +367,23 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
 
 /**
  * Tests Grid Widths (Modules 6 to 20) to find configurations with 0 holes or lowest irregularity.
- * Returns exactly the 4 best unique matching layout variants.
+ * Capped at 1000 iterations per width OR maxTimeMs (default 2000ms = 2s total execution).
  */
-export function generateBinPackingVariants(items, deepOptimization = false) {
+export function generateBinPackingVariants(items, deepOptimization = false, maxTimeMs = 2000) {
     if (!items || items.length === 0) return [];
 
     const results = [];
     const seenSignatures = new Set();
+    const deadline = performance.now() + (maxTimeMs || 2000);
+    const iterCap = deepOptimization ? 10000 : 2000;
 
     // Test grid widths from 6 to 20
     for (let c = 6; c <= 20; c++) {
-        const res = solveModularPacking(items, c, false, deepOptimization);
+        if (performance.now() >= deadline) {
+            break;
+        }
+
+        const res = solveModularPacking(items, c, false, deepOptimization, deadline, iterCap);
         if (!res || !res.placed || res.placed.length === 0) continue;
 
         const sig = `${res.effectiveCols}_${res.totalRows}_${res.emptyCells}_${res.raggedness}`;
@@ -342,12 +391,12 @@ export function generateBinPackingVariants(items, deepOptimization = false) {
         seenSignatures.add(sig);
 
         const ratio = res.effectiveCols / Math.max(1, res.totalRows);
-        let ratioDesc = 'Kwadrat';
-        if (ratio < 0.75) ratioDesc = 'Wysoki pion';
-        else if (ratio < 0.92) ratioDesc = 'Pion';
+        let ratioDesc = 'Square';
+        if (ratio < 0.75) ratioDesc = 'Tall Portrait';
+        else if (ratio < 0.92) ratioDesc = 'Portrait';
         else if (ratio > 1.45) ratioDesc = 'Panorama';
-        else if (ratio > 1.08) ratioDesc = 'Poziom';
-        else ratioDesc = 'Kwadrat';
+        else if (ratio > 1.08) ratioDesc = 'Landscape';
+        else ratioDesc = 'Square';
 
         const squareDist = Math.abs(ratio - 1.0);
         // Scoring formula:
@@ -376,6 +425,7 @@ export function generateBinPackingVariants(items, deepOptimization = false) {
             })),
             isPerfect: res.emptyCells === 0 && res.raggedness === 0,
             isGapless: res.emptyCells === 0,
+            iterationsUsed: res.iterationsUsed || 0,
             score
         });
     }

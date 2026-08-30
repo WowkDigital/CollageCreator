@@ -48,7 +48,7 @@ async function handleFiles(files) {
     const arwFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.arw'));
     
     if (arwFiles.length === 0) {
-        alert('Proszę wybrać pliki .ARW');
+        alert('Please select .ARW files');
         return;
     }
 
@@ -77,10 +77,10 @@ async function processNext() {
             const jpgName = file.name.replace(/\.arw$/i, '.jpg');
             
             zip.file(jpgName, jpegBlob);
-            updateFileStatus(itemEl, 'Gotowe', 'status-done', 'check-circle');
+            updateFileStatus(itemEl, 'Done', 'status-done', 'check-circle');
         } catch (error) {
             console.error(error);
-            updateFileStatus(itemEl, 'Błąd', 'status-error', 'alert-circle');
+            updateFileStatus(itemEl, 'Error', 'status-error', 'alert-circle');
         } finally {
             completedCount++;
             const percent = Math.round((completedCount / filesToProcess.length) * 100);
@@ -103,7 +103,7 @@ function createFileListItem(name) {
         </div>
         <div class="file-status status-wait">
             <i data-lucide="loader" class="w-4 h-4 spin text-accent"></i>
-            <span class="text-xs">Przetwarzanie...</span>
+            <span class="text-xs">Processing...</span>
         </div>
     `;
     lucide.createIcons();
@@ -123,7 +123,7 @@ function updateFileStatus(element, text, className, iconName) {
 downloadBtn.addEventListener('click', async () => {
     downloadBtn.disabled = true;
     const originalContent = downloadBtn.innerHTML;
-    downloadBtn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 spin"></i> Generowanie ZIP...';
+    downloadBtn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 spin"></i> Generating ZIP archive...';
     lucide.createIcons();
 
     try {
@@ -138,7 +138,7 @@ downloadBtn.addEventListener('click', async () => {
         URL.revokeObjectURL(url);
     } catch (err) {
         console.error(err);
-        alert('Błąd podczas generowania pliku ZIP.');
+        alert('Error generating ZIP archive.');
     }
 
     downloadBtn.disabled = false;

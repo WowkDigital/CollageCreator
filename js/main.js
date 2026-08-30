@@ -38,14 +38,14 @@ const updateVariantsUI = (autoSelectBest = false, deepOptimization = false) => {
 if (ui.deepOptimizeBtn) {
     ui.deepOptimizeBtn.addEventListener('click', async () => {
         if (images.length === 0) {
-            utils.showToast('Wgraj zdjęcia, aby przeprowadzić obliczenia', 'alert-circle');
+            utils.showToast('Please upload images to calculate optimization', 'alert-circle');
             return;
         }
 
         const origHtml = ui.deepOptimizeBtnText.textContent;
         ui.deepOptimizeBtn.disabled = true;
         ui.deepOptimizeBtn.classList.add('opacity-75', 'cursor-wait');
-        ui.deepOptimizeBtnText.textContent = 'Trwają głębokie obliczenia...';
+        ui.deepOptimizeBtnText.textContent = 'Running deep optimization...';
 
         // Allow UI to repaint
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -53,7 +53,7 @@ if (ui.deepOptimizeBtn) {
         try {
             updateVariantsUI(true, true);
             triggerRender();
-            utils.showToast('Zakończono głębokie obliczenia siatki!', 'sparkles');
+            utils.showToast('Deep grid optimization complete!', 'sparkles');
         } catch (err) {
             console.error('Deep optimize error:', err);
         } finally {
@@ -83,6 +83,7 @@ updateVariantsUI();
 // --- Handlers ---
 
 async function handleFiles(e) {
+    const tTotalStart = performance.now();
     const files = e.target.files ? [...e.target.files] : [...e.dataTransfer.files];
     // Include .arw files in the selection
     const eligibleFiles = files.filter(f => 
@@ -92,6 +93,7 @@ async function handleFiles(e) {
     if (eligibleFiles.length === 0) return;
 
     // 1. FAST PROBE: Immediately extract Width, Height & Ratio for each selected file
+    const tProbeStart = performance.now();
     const metaProbePromises = eligibleFiles.map(async (file, origIndex) => {
         const isArw = file.name.toLowerCase().endsWith('.arw');
         if (isArw) {
@@ -118,8 +120,10 @@ async function handleFiles(e) {
     });
 
     const fileMetaList = await Promise.all(metaProbePromises);
+    const probeTimeMs = performance.now() - tProbeStart;
 
     // 2. REAL CALCULATIONS: Calculate real Bin Packing optimal variants immediately
+    const tCalcStart = performance.now();
     let initialVariants = [];
     try {
         initialVariants = generateBinPackingVariants(fileMetaList);
@@ -130,6 +134,7 @@ async function handleFiles(e) {
     const bestVariant = (initialVariants && initialVariants.length > 0) ? initialVariants[0] : null;
     const initialCols = bestVariant ? bestVariant.cols : 8;
     const initialSolution = solveModularPacking(fileMetaList, initialCols);
+    const calcTimeMs = performance.now() - tCalcStart;
 
     // 3. DRAW REAL SKELETON: Draw exact modular grid skeleton immediately in workspace
     if (initialSolution && initialSolution.placed && initialSolution.placed.length > 0) {
@@ -137,6 +142,7 @@ async function handleFiles(e) {
     }
 
     // 4. CONCURRENT FULL CONVERSION & PROCESSING
+    const tLoadStart = performance.now();
     const concurrency = Math.max(2, Math.min(navigator.hardwareConcurrency || 3, 4));
 
     const processedResults = await utils.runConcurrent(fileMetaList, concurrency, async (meta, workerIndex) => {
@@ -147,7 +153,7 @@ async function handleFiles(e) {
             let processedFile = file;
 
             if (meta.isArw) {
-                if (ui.loaderCount) ui.loaderCount.textContent = `Konwersja ARW: ${file.name}...`;
+                if (ui.loaderCount) ui.loaderCount.textContent = `ARW Conversion: ${file.name}...`;
                 const jpegBlob = await ImageProcessor.convertArwToJpeg(file);
                 processedFile = new File([jpegBlob], file.name.replace(/\.arw$/i, '.jpg'), { type: 'image/jpeg' });
             }
@@ -178,10 +184,11 @@ async function handleFiles(e) {
             };
         } catch (err) {
             console.error('Error processing file:', file.name, err);
-            utils.showToast(`Błąd: ${file.name}`, 'alert-circle');
+            utils.showToast(`Error processing ${file.name}`, 'alert-circle');
             return null;
         }
     });
+    const loadTimeMs = performance.now() - tLoadStart;
 
     const validImages = processedResults.filter(Boolean);
     images.push(...validImages);
@@ -197,8 +204,16 @@ async function handleFiles(e) {
     updateVariantsUI(true);
     triggerRender();
 
+    const totalTimeMs = performance.now() - tTotalStart;
+
+    console.log(`⏱️ Performance Timings (${validImages.length} images):`);
+    console.log(`  - Metadata Probe: ${probeTimeMs.toFixed(2)} ms`);
+    console.log(`  - Layout Calculation: ${calcTimeMs.toFixed(2)} ms`);
+    console.log(`  - Full Decoding & Thumbs: ${loadTimeMs.toFixed(2)} ms`);
+    console.log(`  - Total Time: ${totalTimeMs.toFixed(2)} ms`);
+
     if (validImages.length > 0) {
-        utils.showToast(`Wczytano ${validImages.length} ${validImages.length === 1 ? 'zdjęcie' : 'zdjęć'}`, 'image');
+        utils.showToast(`Loaded ${validImages.length} image${validImages.length === 1 ? '' : 's'} in ${totalTimeMs.toFixed(0)} ms (Layout: ${calcTimeMs.toFixed(1)} ms)`, 'image');
     }
     ui.fileInput.value = '';
     if (ui.emptyStateFileInput) ui.emptyStateFileInput.value = '';

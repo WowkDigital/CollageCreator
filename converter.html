@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -63,7 +63,7 @@
                 <span class="text-sm font-semibold text-accent uppercase tracking-widest">Sony RAW Processor</span>
             </div>
             <h1 class="text-4xl md:text-6xl font-bold text-white mb-4 tracking-tight">ARW <span class="text-accent text-transparent bg-clip-text bg-gradient-to-r from-accent to-indigo-400 font-extrabold">Instant</span> Converter</h1>
-            <p class="text-slate-400 text-lg max-w-xl mx-auto">Szybkie wyciąganie podglądów JPEG z plików ARW bez utraty metadanych orientacji.</p>
+            <p class="text-slate-400 text-lg max-w-xl mx-auto">Fast JPEG preview extraction from ARW files without losing orientation metadata.</p>
         </header>
 
         <!-- Drop Zone -->
@@ -73,8 +73,8 @@
                 <div class="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 group-hover:bg-accent/20 transition-all duration-500 shadow-xl border border-slate-700">
                     <i data-lucide="upload-cloud" class="w-10 h-10 text-slate-400 group-hover:text-accent transition-colors"></i>
                 </div>
-                <h2 class="text-2xl font-bold text-white mb-2">Przeciągnij pliki ARW</h2>
-                <p class="text-slate-400">lub kliknij tutaj aby wybrać pliki z dysku</p>
+                <h2 class="text-2xl font-bold text-white mb-2">Drag ARW files here</h2>
+                <p class="text-slate-400">or click here to select files from disk</p>
                 <div class="mt-8 flex justify-center gap-4">
                     <span class="px-3 py-1 bg-slate-800 rounded-md text-xs font-medium text-slate-400 border border-slate-700">.ARW ONLY</span>
                     <span class="px-3 py-1 bg-slate-800 rounded-md text-xs font-medium text-slate-400 border border-slate-700">EXIF ROTATION</span>
@@ -90,7 +90,7 @@
                 <div class="flex items-center justify-between mb-6">
                     <div>
                         <h3 class="text-xl font-bold text-white flex items-center gap-2">
-                             Przetwarzanie plików
+                             Processing files
                              <span id="total-count" class="bg-slate-800 text-xs px-2 py-0.5 rounded text-accent">0</span>
                         </h3>
                     </div>
@@ -106,10 +106,10 @@
 
                 <div class="mt-8 flex flex-col md:flex-row gap-4 items-center justify-between pt-8 border-t border-slate-700/50">
                     <button id="reset-btn" class="w-full md:w-auto px-6 py-3 text-sm font-bold text-slate-400 hover:text-white flex items-center justify-center gap-2 transition-colors">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Resetuj
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Reset
                     </button>
                     <button id="download-btn" disabled class="w-full md:w-auto bg-accent hover:bg-indigo-500 disabled:opacity-30 disabled:hover:bg-accent text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-3">
-                        <i data-lucide="download" class="w-5 h-5"></i> Pobierz paczkę ZIP
+                        <i data-lucide="download" class="w-5 h-5"></i> Download ZIP Archive
                     </button>
                 </div>
             </div>
@@ -117,7 +117,7 @@
             <!-- File List -->
             <div class="glass-panel rounded-3xl overflow-hidden border border-white/5">
                 <div class="px-8 py-4 bg-slate-800/50 border-b border-slate-700/50 flex items-center justify-between">
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Kolejka plików</span>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">File Queue</span>
                     <i data-lucide="list" class="w-4 h-4 text-slate-500"></i>
                 </div>
                 <div id="file-list" class="max-h-[400px] overflow-y-auto custom-scrollbar">

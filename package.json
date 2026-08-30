@@ -1,0 +1,23 @@
+{
+  "name": "collage-creator-pro",
+  "version": "2.0.0",
+  "description": "High-performance 2D Bin Packing Collage Creator with 100% gapless optimization",
+  "main": "js/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "python -m http.server 8085",
+    "test": "node tests/benchmark.js \"C:/Users/wowkd/Downloads/snap\"",
+    "test:large": "node tests/run_large_benchmark.js",
+    "test:annealing": "node tests/test_annealing.js",
+    "test:mods": "node tests/test_mod_gapless.js"
+  },
+  "keywords": [
+    "collage",
+    "bin-packing",
+    "canvas",
+    "photo-grid",
+    "gapless-optimization"
+  ],
+  "author": "Antigravity DeepMind Team",
+  "license": "MIT"
+}

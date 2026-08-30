@@ -202,7 +202,7 @@ export function renderVariantSuggestions(variants, onSelect) {
     if (!variants || variants.length === 0) {
         if (variantsFoundBadge) variantsFoundBadge.classList.add('hidden');
         if (deepOptimizeBtn) deepOptimizeBtn.classList.add('hidden');
-        variantSuggestionsList.innerHTML = '<div class="col-span-2 text-center text-[10px] text-gray-400 py-4 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">Wgraj zdjęcia, aby wyznaczyć 4 warianty</div>';
+        variantSuggestionsList.innerHTML = '<div class="col-span-2 text-center text-[10px] text-gray-400 py-4 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">Upload images to generate 4 variants</div>';
         return;
     }
 
@@ -227,7 +227,7 @@ export function renderVariantSuggestions(variants, onSelect) {
                 ? 'bg-accentGreen/15 border-accentGreen shadow-md ring-2 ring-accentGreen/60' 
                 : 'bg-[#0d0d18] border-gray-700/80 hover:border-accentGreen/60 hover:bg-gray-800/40'
         }`;
-        card.title = `${variant.cols} modułów (${variant.ratioDesc}, ${variant.isGapless ? '0 luk' : variant.emptyCells + ' luk'})`;
+        card.title = `${variant.cols} modules (${variant.ratioDesc}, ${variant.isGapless ? '0 gaps' : variant.emptyCells + ' gaps'})`;
 
         // Miniature square canvas: 220x220 for crisp preview
         const miniCanvas = document.createElement('canvas');
