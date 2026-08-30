@@ -11,11 +11,11 @@ let renderTimeout;
 lucide.createIcons();
 ui.updateValueDisplays();
 
-const updateVariantsUI = (autoSelectBest = false) => {
+const updateVariantsUI = (autoSelectBest = false, deepOptimization = false) => {
     const layout = document.querySelector('input[name="layout"]:checked')?.value || 'bin-packing';
     if (layout === 'bin-packing' && images.length > 0) {
         try {
-            const variants = generateBinPackingVariants(images);
+            const variants = generateBinPackingVariants(images, deepOptimization);
             if (autoSelectBest && variants.length > 0) {
                 // Auto-select #1 best variant (closest to square & gapless)
                 ui.inputs.colCount.value = variants[0].sliderVal;
@@ -34,6 +34,36 @@ const updateVariantsUI = (autoSelectBest = false) => {
         ui.variantsFoundBadge.classList.add('hidden');
     }
 };
+
+if (ui.deepOptimizeBtn) {
+    ui.deepOptimizeBtn.addEventListener('click', async () => {
+        if (images.length === 0) {
+            utils.showToast('Wgraj zdjęcia, aby przeprowadzić obliczenia', 'alert-circle');
+            return;
+        }
+
+        const origHtml = ui.deepOptimizeBtnText.textContent;
+        ui.deepOptimizeBtn.disabled = true;
+        ui.deepOptimizeBtn.classList.add('opacity-75', 'cursor-wait');
+        ui.deepOptimizeBtnText.textContent = 'Trwają głębokie obliczenia...';
+
+        // Allow UI to repaint
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        try {
+            updateVariantsUI(true, true);
+            triggerRender();
+            utils.showToast('Zakończono głębokie obliczenia siatki!', 'sparkles');
+        } catch (err) {
+            console.error('Deep optimize error:', err);
+        } finally {
+            ui.deepOptimizeBtn.disabled = false;
+            ui.deepOptimizeBtn.classList.remove('opacity-75', 'cursor-wait');
+            ui.deepOptimizeBtnText.textContent = origHtml;
+            lucide.createIcons();
+        }
+    });
+}
 
 const triggerRender = () => {
     clearTimeout(renderTimeout);

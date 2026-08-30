@@ -260,11 +260,15 @@
                                     <i data-lucide="sparkles" class="w-3.5 h-3.5 text-accentGreen"></i>
                                     <span>Optymalne warianty siatki (TOP 4)</span>
                                 </div>
-                                <span id="variantsFoundBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-accentGreen/20 text-accentGreen font-mono font-bold hidden">4 warianty</span>
+                                <span id="variantsFoundBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-accentGreen/20 text-accentGreen font-mono font-bold hidden">TOP 4</span>
                             </div>
                             <div id="variantSuggestionsList" class="grid grid-cols-2 gap-2 p-0.5">
                                 <!-- JS fills this with ONLY the 4 clickable miniature cards -->
                             </div>
+                            <button id="deepOptimizeBtn" class="mt-2.5 w-full py-1.5 px-2.5 bg-gray-800/80 hover:bg-accentGreen/20 hover:border-accentGreen/60 border border-gray-700 rounded-lg text-[11px] font-medium text-gray-300 hover:text-accentGreen transition-all flex items-center justify-center gap-1.5 shadow-sm group">
+                                <i data-lucide="cpu" class="w-3.5 h-3.5 text-accentGreen group-hover:rotate-12 transition-transform"></i>
+                                <span id="deepOptimizeBtnText">Głęboka optymalizacja (Więcej iteracji)</span>
+                            </button>
                         </div>
                     </div>
 

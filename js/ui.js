@@ -31,6 +31,8 @@ export const mobileShowPreviewBanner = document.getElementById('mobileShowPrevie
 export const binPackingVariantsContainer = document.getElementById('binPackingVariantsContainer');
 export const variantSuggestionsList = document.getElementById('variantSuggestionsList');
 export const variantsFoundBadge = document.getElementById('variantsFoundBadge');
+export const deepOptimizeBtn = document.getElementById('deepOptimizeBtn');
+export const deepOptimizeBtnText = document.getElementById('deepOptimizeBtnText');
 export const skeletonWorkspace = document.getElementById('skeletonWorkspace');
 export const skeletonBoard = document.getElementById('skeletonBoard');
 
@@ -199,6 +201,7 @@ export function renderVariantSuggestions(variants, onSelect) {
 
     if (!variants || variants.length === 0) {
         if (variantsFoundBadge) variantsFoundBadge.classList.add('hidden');
+        if (deepOptimizeBtn) deepOptimizeBtn.classList.add('hidden');
         variantSuggestionsList.innerHTML = '<div class="col-span-2 text-center text-[10px] text-gray-400 py-4 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">Wgraj zdjęcia, aby wyznaczyć 4 warianty</div>';
         return;
     }
@@ -206,6 +209,9 @@ export function renderVariantSuggestions(variants, onSelect) {
     if (variantsFoundBadge) {
         variantsFoundBadge.classList.remove('hidden');
         variantsFoundBadge.textContent = 'TOP 4';
+    }
+    if (deepOptimizeBtn) {
+        deepOptimizeBtn.classList.remove('hidden');
     }
 
     const currentSliderVal = parseInt(inputs.colCount.value) || 8;

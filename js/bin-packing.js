@@ -74,7 +74,7 @@ export function classifyImageToBlock(item, cols, origIndex = 0) {
  * Evaluates discrete grid layout for given modular width (cols).
  * Returns placed blocks, dimensions, empty cells, and bottom raggedness.
  */
-export function solveModularPacking(items, cols, highRes = false) {
+export function solveModularPacking(items, cols, highRes = false, deepOptimization = false) {
     if (!items || items.length === 0) return null;
 
     // Classify each item into modular block dimensions (wu, hu)
@@ -207,13 +207,22 @@ export function solveModularPacking(items, cols, highRes = false) {
 
     let bestCandidate = solvePacking(rawBlocks);
 
-    if (rawBlocks.length > 2 && bestCandidate.emptyCells > 0) {
+    // Heuristic 1: Sort by Block Area & Height
+    if (rawBlocks.length > 2) {
         const sortedByArea = [...rawBlocks].sort((a, b) => (b.wu * b.hu) - (a.wu * a.hu) || b.hu - a.hu);
-        const cand2 = solvePacking(sortedByArea);
-        if (cand2.score < bestCandidate.score) bestCandidate = cand2;
+        const candArea = solvePacking(sortedByArea);
+        if (candArea.score < bestCandidate.score) bestCandidate = candArea;
     }
 
-    if (rawBlocks.length > 3 && bestCandidate.emptyCells > 0) {
+    // Heuristic 2: Sort by Height descending (tall portrait blocks first to avoid hanging columns)
+    if (rawBlocks.length > 2) {
+        const sortedByHeight = [...rawBlocks].sort((a, b) => b.hu - a.hu || (b.wu * b.hu) - (a.wu * a.hu));
+        const candH = solvePacking(sortedByHeight);
+        if (candH.score < bestCandidate.score) bestCandidate = candH;
+    }
+
+    // Heuristic 3: Interleaved Landscapes and Portraits
+    if (rawBlocks.length > 3) {
         const landscapes = rawBlocks.filter(b => b.wu >= b.hu);
         const portraits = rawBlocks.filter(b => b.wu < b.hu);
         const alternated = [];
@@ -222,31 +231,67 @@ export function solveModularPacking(items, cols, highRes = false) {
             if (li < landscapes.length) alternated.push(landscapes[li++]);
             if (pi < portraits.length) alternated.push(portraits[pi++]);
         }
-        const cand3 = solvePacking(alternated);
-        if (cand3.score < bestCandidate.score) bestCandidate = cand3;
+        const candAlt = solvePacking(alternated);
+        if (candAlt.score < bestCandidate.score) bestCandidate = candAlt;
     }
 
-    if (rawBlocks.length > 3 && bestCandidate.emptyCells > 0) {
-        let seed = (rawBlocks.length * 997) + (effectiveCols * 31);
+    // Heuristic 4: Paired Portraits (two 2x3 portraits side-by-side make 4x3 or 6x3 with landscapes)
+    if (rawBlocks.length > 3) {
+        const landscapes = rawBlocks.filter(b => b.wu >= b.hu);
+        const portraits = rawBlocks.filter(b => b.wu < b.hu);
+        const paired = [];
+        let li = 0, pi = 0;
+        while (li < landscapes.length || pi < portraits.length) {
+            if (pi < portraits.length) {
+                paired.push(portraits[pi++]);
+                if (pi < portraits.length) paired.push(portraits[pi++]);
+            }
+            if (li < landscapes.length) {
+                paired.push(landscapes[li++]);
+                if (li < landscapes.length) paired.push(landscapes[li++]);
+            }
+        }
+        const candPaired = solvePacking(paired);
+        if (candPaired.score < bestCandidate.score) bestCandidate = candPaired;
+    }
+
+    // Dynamic Multi-Iteration Perturbation / Simulated Search
+    // Starting from 30 photos, we run heavier calculations (120+ iterations), and with deepOptimization up to 300+ iterations
+    if (rawBlocks.length > 3 && (bestCandidate.emptyCells > 0 || bestCandidate.raggedness > 0 || deepOptimization)) {
+        let baseIterations = 30;
+        if (rawBlocks.length >= 30) {
+            baseIterations = deepOptimization ? 350 : 150;
+        } else if (rawBlocks.length >= 15) {
+            baseIterations = deepOptimization ? 200 : 70;
+        } else {
+            baseIterations = deepOptimization ? 100 : 35;
+        }
+
+        let seed = (rawBlocks.length * 997) + (effectiveCols * 31) + (deepOptimization ? 7777 : 0);
         const seededRandom = () => {
             seed = (seed * 1664525 + 1013904223) % 4294967296;
             return seed / 4294967296;
         };
 
-        for (let t = 0; t < 12; t++) {
-            const perturbed = [...rawBlocks];
-            for (let s = 0; s < perturbed.length - 1; s++) {
-                if (seededRandom() < 0.35) {
-                    const swapIdx = s + 1 + Math.floor(seededRandom() * Math.min(3, perturbed.length - s - 1));
-                    const tmp = perturbed[s];
-                    perturbed[s] = perturbed[swapIdx];
-                    perturbed[swapIdx] = tmp;
+        const topOrder = [...bestCandidate.placed].map(p => rawBlocks[p.origIndex] || p);
+
+        for (let t = 0; t < baseIterations; t++) {
+            const perturbed = [...topOrder];
+            // Multi-swap strategy with variable temperatures
+            const swapCount = Math.max(1, Math.floor(rawBlocks.length * (t % 2 === 0 ? 0.12 : 0.25)));
+            for (let s = 0; s < swapCount; s++) {
+                const i1 = Math.floor(seededRandom() * perturbed.length);
+                const i2 = Math.floor(seededRandom() * perturbed.length);
+                if (i1 !== i2) {
+                    const tmp = perturbed[i1];
+                    perturbed[i1] = perturbed[i2];
+                    perturbed[i2] = tmp;
                 }
             }
             const candRand = solvePacking(perturbed);
             if (candRand.score < bestCandidate.score) {
                 bestCandidate = candRand;
-                if (bestCandidate.emptyCells === 0) break;
+                if (bestCandidate.emptyCells === 0 && bestCandidate.raggedness === 0 && !deepOptimization) break;
             }
         }
     }
@@ -281,7 +326,7 @@ export function solveModularPacking(items, cols, highRes = false) {
  * Tests Grid Widths (Modules 6 to 20) to find configurations with 0 holes or lowest irregularity.
  * Returns exactly the 4 best unique matching layout variants.
  */
-export function generateBinPackingVariants(items) {
+export function generateBinPackingVariants(items, deepOptimization = false) {
     if (!items || items.length === 0) return [];
 
     const results = [];
@@ -289,7 +334,7 @@ export function generateBinPackingVariants(items) {
 
     // Test grid widths from 6 to 20
     for (let c = 6; c <= 20; c++) {
-        const res = solveModularPacking(items, c, false);
+        const res = solveModularPacking(items, c, false, deepOptimization);
         if (!res || !res.placed || res.placed.length === 0) continue;
 
         const sig = `${res.effectiveCols}_${res.totalRows}_${res.emptyCells}_${res.raggedness}`;
