@@ -36,35 +36,13 @@ export async function renderCollage(images, highRes = false, canvas, ctx, inputs
                 const cw = block.gw * moduleUnit + (block.gw - 1) * gap;
                 const ch = block.gh * moduleUnit + (block.gh - 1) * gap;
 
-                // Aspect-fit inside container with padding (no cropping)
-                const imgAspect = block.img.naturalWidth / block.img.naturalHeight;
-                const containerAspect = cw / ch;
-                let dw, dh, dx, dy;
-
-                if (Math.abs(imgAspect - containerAspect) < 0.005) {
-                    dw = cw;
-                    dh = ch;
-                    dx = cx;
-                    dy = cy;
-                } else if (imgAspect > containerAspect) {
-                    dw = cw;
-                    dh = cw / imgAspect;
-                    dx = cx;
-                    dy = cy + (ch - dh) / 2;
-                } else {
-                    dh = ch;
-                    dw = ch * imgAspect;
-                    dx = cx + (cw - dw) / 2;
-                    dy = cy;
-                }
-
                 positions.push({
                     img: block.img,
-                    x: dx,
-                    y: dy,
-                    w: dw,
-                    h: dh,
-                    crop: false
+                    x: cx,
+                    y: cy,
+                    w: cw,
+                    h: ch,
+                    crop: true // Match miniCanvas cover-crop exactly!
                 });
 
                 currentMaxY = Math.max(currentMaxY, cy + ch + gap);

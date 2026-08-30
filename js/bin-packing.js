@@ -30,9 +30,9 @@ export function getImageDimensions(item) {
 /**
  * Classifies an image into modular block width and height (wu, hu) based on ratio and total columns.
  */
-export function classifyImageToBlock(item, cols, origIndex = 0) {
+export function classifyImageToBlock(item, cols, origIndex = 0, highRes = false) {
     const { width: nw, height: nh, ratio: r } = getImageDimensions(item);
-    const img = item.original || item.thumb || (item.tagName === 'IMG' ? item : null);
+    const img = (highRes ? item.original : (item.thumb || item.original)) || (item.tagName === 'IMG' ? item : null);
 
     let wu = 3, hu = 2; // Default landscape: 3x2, area = 6
 
@@ -78,7 +78,7 @@ export function solveModularPacking(items, cols, highRes = false, deepOptimizati
     if (!items || items.length === 0) return null;
 
     // Classify each item into modular block dimensions (wu, hu)
-    const rawBlocks = items.map((item, idx) => classifyImageToBlock(item, cols, idx));
+    const rawBlocks = items.map((item, idx) => classifyImageToBlock(item, cols, idx, highRes));
 
     // If very few images, adapt grid columns so layout doesn't look excessively empty
     const totalNominalWidth = rawBlocks.reduce((acc, b) => acc + b.wu, 0);
