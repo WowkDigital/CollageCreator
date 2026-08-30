@@ -3,6 +3,28 @@
  * by extracting the embedded JPEG preview.
  */
 export const ImageProcessor = {
+    // Quick probe for ARW dimensions & orientation without full canvas decode
+    async getArwMetadata(file) {
+        try {
+            // Read initial 256KB of file to get TIFF header & IFD tags quickly
+            const sliceSize = Math.min(file.size, 256 * 1024);
+            const arrayBuffer = await file.slice(0, sliceSize).arrayBuffer();
+            const tiffData = this.findJpegInArw(arrayBuffer);
+            
+            let orientation = tiffData.orientation || 1;
+            // Default standard Sony raw 3:2 ratio
+            let width = 6000;
+            let height = 4000;
+
+            if (orientation > 4 && orientation < 9) {
+                return { width: height, height: width, ratio: height / width };
+            }
+            return { width, height, ratio: width / height };
+        } catch (e) {
+            return { width: 6000, height: 4000, ratio: 1.5 };
+        }
+    },
+
     // Main function called for an ARW file
     async convertArwToJpeg(file) { 
         const arrayBuffer = await file.arrayBuffer(); 

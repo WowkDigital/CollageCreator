@@ -310,174 +310,63 @@ export function renderVariantSuggestions(variants, onSelect) {
     });
 }
 
-let skeletonInterval = null;
-let skeletonTiles = [];
+let skeletonTilesMap = new Map();
 
-export function showSkeletonLoader(fileCount = 6) {
+/**
+ * Initializes and displays the exact computed Bin Packing modular skeleton
+ * in the workspace right after images are selected and their dimensions are probed.
+ */
+export function showRealGridSkeleton(placedBlocks, cols, totalRows) {
     if (!skeletonWorkspace || !skeletonBoard) return;
 
-    const count = Math.max(1, fileCount);
-    clearInterval(skeletonInterval);
     skeletonBoard.innerHTML = '';
-    skeletonBoard.style.aspectRatio = '4 / 3';
-    skeletonTiles = [];
+    skeletonTilesMap.clear();
+    
+    // Set exact collage aspect ratio for the board
+    const safeCols = Math.max(1, cols);
+    const safeRows = Math.max(1, totalRows);
+    skeletonBoard.style.aspectRatio = `${safeCols} / ${safeRows}`;
 
-    // Hide empty state and canvas wrapper, show workspace skeleton board
+    // Hide empty state and canvas wrapper, show workspace skeleton
     emptyState.classList.add('hidden');
     canvasWrapper.classList.add('hidden');
     skeletonWorkspace.classList.remove('hidden');
 
-    // 1. Candidate Modular 2D Grid
-    const cols = Math.max(3, Math.min(8, Math.ceil(Math.sqrt(count * 2))));
-    const grid = [];
-    const isOcc = (gx, gy) => grid[gy] && grid[gy][gx];
-    const occ = (gx, gy, w, h) => {
-        for (let y = gy; y < gy + h; y++) {
-            while (grid.length <= y) grid.push(new Array(cols).fill(false));
-            for (let x = gx; x < gx + w; x++) grid[y][x] = true;
-        }
-    };
-    const modularBlocks = [];
-    for (let i = 0; i < count; i++) {
-        const type = i % 3;
-        let w = type === 0 ? 3 : (type === 1 ? 2 : 2);
-        let h = type === 0 ? 2 : (type === 1 ? 3 : 2);
-        if (w > cols) w = cols;
-        for (let y = 0; y < 100; y++) {
-            let placed = false;
-            for (let x = 0; x <= cols - w; x++) {
-                let can = true;
-                for (let cy = y; cy < y + h; cy++) {
-                    for (let cx = x; cx < x + w; cx++) {
-                        if (isOcc(cx, cy)) { can = false; break; }
-                    }
-                    if (!can) break;
-                }
-                if (can) {
-                    occ(x, y, w, h);
-                    modularBlocks.push({ x, y, w, h });
-                    placed = true;
-                    break;
-                }
-            }
-            if (placed) break;
-        }
-    }
-    const totRows = Math.max(1, grid.length);
-    const layoutA = modularBlocks.map(b => ({
-        x: (b.x / cols) * 100,
-        y: (b.y / totRows) * 100,
-        w: (b.w / cols) * 100,
-        h: (b.h / totRows) * 100
-    }));
+    const pad = 2; // subtle gap between skeleton cells
 
-    // 2. Candidate Masonry Columns
-    const mCols = Math.min(4, Math.max(2, Math.round(Math.sqrt(count))));
-    const colHeights = new Array(mCols).fill(0);
-    const mPlaced = [];
-    for (let i = 0; i < count; i++) {
-        const minCol = colHeights.indexOf(Math.min(...colHeights));
-        const hVal = [1.2, 0.85, 1.4, 1.0][i % 4];
-        mPlaced.push({ col: minCol, y: colHeights[minCol], h: hVal });
-        colHeights[minCol] += hVal;
-    }
-    const maxH = Math.max(...colHeights);
-    const layoutB = mPlaced.map(p => ({
-        x: (p.col / mCols) * 100,
-        y: (p.y / maxH) * 100,
-        w: (1 / mCols) * 100,
-        h: (p.h / maxH) * 100
-    }));
-
-    // 3. Candidate Justified Rows
-    const rCount = Math.min(4, Math.max(2, Math.ceil(count / 3)));
-    const rows = Array.from({ length: rCount }, () => []);
-    for (let i = 0; i < count; i++) {
-        rows[i % rCount].push({ id: i, r: [1.4, 0.9, 1.1, 1.6][i % 4] });
-    }
-    const layoutC = [];
-    let curYPct = 0;
-    const rHPct = 100 / rCount;
-    rows.forEach(rItems => {
-        const totalR = rItems.reduce((acc, it) => acc + it.r, 0);
-        let curXPct = 0;
-        rItems.forEach(it => {
-            const wPct = (it.r / totalR) * 100;
-            layoutC[it.id] = { x: curXPct, y: curYPct, w: wPct, h: rHPct };
-            curXPct += wPct;
-        });
-        curYPct += rHPct;
-    });
-
-    const layouts = [layoutA, layoutB, layoutC];
-    let step = 0;
-
-    // Create N clean tiles with NO text
-    for (let i = 0; i < count; i++) {
+    placedBlocks.forEach((block) => {
         const tile = document.createElement('div');
         tile.className = 'skeleton-tile';
-        skeletonBoard.appendChild(tile);
-        skeletonTiles.push(tile);
-    }
-
-    const applyLayout = (layout) => {
-        skeletonTiles.forEach((tile, i) => {
-            const pos = layout[i] || layoutA[i] || { x: 0, y: 0, w: 100, h: 100 };
-            const pad = 2;
-            tile.style.left = `calc(${pos.x}% + ${pad}px)`;
-            tile.style.top = `calc(${pos.y}% + ${pad}px)`;
-            tile.style.width = `calc(${pos.w}% - ${pad * 2}px)`;
-            tile.style.height = `calc(${pos.h}% - ${pad * 2}px)`;
-        });
-    };
-
-    applyLayout(layoutA);
-
-    // 1s per layout switch, crisp and zero lag
-    skeletonInterval = setInterval(() => {
-        step = (step + 1) % layouts.length;
-        applyLayout(layouts[step]);
-    }, 1000);
-}
-
-export function markSkeletonTileReady(index) {
-    if (skeletonTiles && skeletonTiles[index]) {
-        skeletonTiles[index].classList.add('ready');
-    }
-}
-
-export function showRealSkeleton(placedBlocks, cols, totalRows) {
-    if (!skeletonWorkspace || !skeletonBoard || !placedBlocks || placedBlocks.length === 0) return;
-    clearInterval(skeletonInterval);
-    skeletonInterval = null;
-
-    skeletonBoard.style.aspectRatio = `${cols} / ${totalRows}`;
-
-    const pad = 3;
-    placedBlocks.forEach((p, idx) => {
-        let tile = skeletonTiles[idx];
-        if (!tile) {
-            tile = document.createElement('div');
-            skeletonBoard.appendChild(tile);
-            skeletonTiles.push(tile);
-        }
-        tile.className = 'skeleton-tile ready';
-        const xPct = (p.gx / cols) * 100;
-        const yPct = (p.gy / totalRows) * 100;
-        const wPct = (p.gw / cols) * 100;
-        const hPct = (p.gh / totalRows) * 100;
+        
+        const xPct = (block.gx / safeCols) * 100;
+        const yPct = (block.gy / safeRows) * 100;
+        const wPct = (block.gw / safeCols) * 100;
+        const hPct = (block.gh / safeRows) * 100;
 
         tile.style.left = `calc(${xPct}% + ${pad}px)`;
         tile.style.top = `calc(${yPct}% + ${pad}px)`;
         tile.style.width = `calc(${wPct}% - ${pad * 2}px)`;
         tile.style.height = `calc(${hPct}% - ${pad * 2}px)`;
+
+        skeletonBoard.appendChild(tile);
+        skeletonTilesMap.set(block.origIndex, tile);
     });
+}
+
+/**
+ * Gently highlights a specific skeleton tile when its corresponding image finishes conversion/loading.
+ */
+export function markSkeletonTileReady(origIndex) {
+    const tile = skeletonTilesMap.get(origIndex);
+    if (tile) {
+        tile.classList.add('ready');
+    }
 }
 
 export function hideSkeletonLoader() {
     if (!skeletonWorkspace) return;
-    clearInterval(skeletonInterval);
-    skeletonInterval = null;
     skeletonWorkspace.classList.add('hidden');
     if (skeletonBoard) skeletonBoard.innerHTML = '';
+    skeletonTilesMap.clear();
 }
+

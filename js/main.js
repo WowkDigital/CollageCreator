@@ -61,18 +61,63 @@ async function handleFiles(e) {
     
     if (eligibleFiles.length === 0) return;
 
-    const animStartTime = Date.now();
-    ui.showSkeletonLoader(eligibleFiles.length);
+    // 1. FAST PROBE: Immediately extract Width, Height & Ratio for each selected file
+    const metaProbePromises = eligibleFiles.map(async (file, origIndex) => {
+        const isArw = file.name.toLowerCase().endsWith('.arw');
+        if (isArw) {
+            const meta = await ImageProcessor.getArwMetadata(file);
+            return { origIndex, file, isArw: true, width: meta.width, height: meta.height, ratio: meta.ratio };
+        } else {
+            // Standard image - quickly probe dimensions via lightweight Image/ObjectUrl
+            return new Promise(resolve => {
+                const objectUrl = URL.createObjectURL(file);
+                const tempImg = new Image();
+                tempImg.onload = () => {
+                    const w = tempImg.naturalWidth || 1200;
+                    const h = tempImg.naturalHeight || 800;
+                    URL.revokeObjectURL(objectUrl);
+                    resolve({ origIndex, file, isArw: false, width: w, height: h, ratio: w / h, tempObjectUrl: null });
+                };
+                tempImg.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve({ origIndex, file, isArw: false, width: 1200, height: 800, ratio: 1.5 });
+                };
+                tempImg.src = objectUrl;
+            });
+        }
+    });
 
+    const fileMetaList = await Promise.all(metaProbePromises);
+
+    // 2. REAL CALCULATIONS: Calculate real Bin Packing optimal variants immediately
+    let initialVariants = [];
+    try {
+        initialVariants = generateBinPackingVariants(fileMetaList);
+    } catch (err) {
+        console.error('Error generating initial variants from dimensions:', err);
+    }
+
+    const bestVariant = (initialVariants && initialVariants.length > 0) ? initialVariants[0] : null;
+    const initialCols = bestVariant ? bestVariant.cols : 8;
+    const initialSolution = solveModularPacking(fileMetaList, initialCols);
+
+    // 3. DRAW REAL SKELETON: Draw exact modular grid skeleton immediately in workspace
+    if (initialSolution && initialSolution.placed && initialSolution.placed.length > 0) {
+        ui.showRealGridSkeleton(initialSolution.placed, initialSolution.effectiveCols, initialSolution.totalRows);
+    }
+
+    // 4. CONCURRENT FULL CONVERSION & PROCESSING
     const concurrency = Math.max(2, Math.min(navigator.hardwareConcurrency || 3, 4));
 
-    const processedResults = await utils.runConcurrent(eligibleFiles, concurrency, async (file, index) => {
+    const processedResults = await utils.runConcurrent(fileMetaList, concurrency, async (meta, workerIndex) => {
+        const file = meta.file;
+        const origIndex = meta.origIndex;
+
         try {
             let processedFile = file;
-            const isArw = file.name.toLowerCase().endsWith('.arw');
 
-            if (isArw) {
-                if (ui.loaderCount) ui.loaderCount.textContent = `Parsing ARW: ${file.name}...`;
+            if (meta.isArw) {
+                if (ui.loaderCount) ui.loaderCount.textContent = `Konwersja ARW: ${file.name}...`;
                 const jpegBlob = await ImageProcessor.convertArwToJpeg(file);
                 processedFile = new File([jpegBlob], file.name.replace(/\.arw$/i, '.jpg'), { type: 'image/jpeg' });
             }
@@ -90,8 +135,8 @@ async function handleFiles(e) {
 
             const thumbImg = await utils.createThumbnail(img);
             
-            // Gently highlight this skeleton tile as converted
-            ui.markSkeletonTileReady(index);
+            // 5. GENTLY HIGHLIGHT: Light up the corresponding skeleton tile as soon as converted
+            ui.markSkeletonTileReady(origIndex);
 
             return {
                 id: Date.now() + Math.random(),
@@ -103,7 +148,7 @@ async function handleFiles(e) {
             };
         } catch (err) {
             console.error('Error processing file:', file.name, err);
-            utils.showToast(`Error: ${file.name}`, 'alert-circle');
+            utils.showToast(`Błąd: ${file.name}`, 'alert-circle');
             return null;
         }
     });
@@ -111,27 +156,8 @@ async function handleFiles(e) {
     const validImages = processedResults.filter(Boolean);
     images.push(...validImages);
 
-    // Calculate real layout and show real skeleton geometry
-    if (validImages.length > 0) {
-        try {
-            const variants = generateBinPackingVariants(validImages);
-            if (variants && variants.length > 0) {
-                const solution = solveModularPacking(validImages, variants[0].sliderVal);
-                if (solution && solution.placed) {
-                    ui.showRealSkeleton(solution.placed, solution.effectiveCols, solution.totalRows);
-                }
-            }
-        } catch (err) {
-            console.warn('Error computing real skeleton:', err);
-        }
-    }
-
-    // Ensure minimum animation duration of 2 seconds
-    const elapsed = Date.now() - animStartTime;
-    const remainingWait = Math.max(0, 2000 - elapsed);
-    if (remainingWait > 0) {
-        await new Promise(resolve => setTimeout(resolve, remainingWait));
-    }
+    // Small graceful pause so user can see completion before final render transition
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     ui.hideSkeletonLoader();
 
@@ -142,11 +168,12 @@ async function handleFiles(e) {
     triggerRender();
 
     if (validImages.length > 0) {
-        utils.showToast(`Loaded ${validImages.length} ${validImages.length === 1 ? 'image' : 'images'}`, 'image');
+        utils.showToast(`Wczytano ${validImages.length} ${validImages.length === 1 ? 'zdjęcie' : 'zdjęć'}`, 'image');
     }
     ui.fileInput.value = '';
     if (ui.emptyStateFileInput) ui.emptyStateFileInput.value = '';
 }
+
 
 function renderThumbnailsList() {
     ui.renderThumbnails(
