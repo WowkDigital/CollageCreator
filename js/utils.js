@@ -2,27 +2,52 @@ const MAX_THUMB_SIZE = 400;
 
 export function createThumbnail(img) {
     return new Promise(resolve => {
-        if (img.width <= MAX_THUMB_SIZE && img.height <= MAX_THUMB_SIZE) {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (w <= MAX_THUMB_SIZE && h <= MAX_THUMB_SIZE) {
             resolve(img);
             return;
         }
         const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const ratio = img.width / img.height;
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const ratio = w / h;
         
-        if (img.width > img.height) {
+        if (w > h) {
             canvas.width = MAX_THUMB_SIZE;
-            canvas.height = MAX_THUMB_SIZE / ratio;
+            canvas.height = Math.round(MAX_THUMB_SIZE / ratio);
         } else {
             canvas.height = MAX_THUMB_SIZE;
-            canvas.width = MAX_THUMB_SIZE * ratio;
+            canvas.width = Math.round(MAX_THUMB_SIZE * ratio);
         }
         
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const newImg = new Image();
-        newImg.onload = () => resolve(newImg);
-        newImg.src = canvas.toDataURL();
+        canvas.toBlob(blob => {
+            if (!blob) {
+                resolve(img);
+                return;
+            }
+            const newImg = new Image();
+            newImg.onload = () => resolve(newImg);
+            newImg.onerror = () => resolve(img);
+            newImg.src = URL.createObjectURL(blob);
+        }, 'image/jpeg', 0.82);
     });
+}
+
+export async function runConcurrent(items, limit, workerFn) {
+    const results = new Array(items.length);
+    let currentIndex = 0;
+
+    const concurrency = Math.max(1, Math.min(limit, items.length));
+    const workers = Array.from({ length: concurrency }, async () => {
+        while (currentIndex < items.length) {
+            const index = currentIndex++;
+            results[index] = await workerFn(items[index], index);
+        }
+    });
+
+    await Promise.all(workers);
+    return results;
 }
 
 export function preventDefaults(e) { 

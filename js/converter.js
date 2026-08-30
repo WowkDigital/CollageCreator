@@ -1,4 +1,5 @@
 import { ImageProcessor } from './arw-processor.js';
+import { runConcurrent } from './utils.js';
 
 // UI Logic
 const dropZone = document.getElementById('drop-zone');
@@ -61,30 +62,32 @@ async function handleFiles(files) {
 
 async function processNext() {
     let completedCount = 0;
-
-    for (const file of filesToProcess) {
+    const itemElements = filesToProcess.map(file => {
         const itemEl = createFileListItem(file.name);
         fileList.appendChild(itemEl);
-        // Scroll to newest
-        itemEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        return itemEl;
+    });
 
+    const concurrency = Math.max(2, Math.min(navigator.hardwareConcurrency || 4, 4));
+
+    await runConcurrent(filesToProcess, concurrency, async (file, index) => {
+        const itemEl = itemElements[index];
         try {
             const jpegBlob = await ImageProcessor.convertArwToJpeg(file);
             const jpgName = file.name.replace(/\.arw$/i, '.jpg');
             
             zip.file(jpgName, jpegBlob);
-            
             updateFileStatus(itemEl, 'Gotowe', 'status-done', 'check-circle');
-            completedCount++;
         } catch (error) {
             console.error(error);
             updateFileStatus(itemEl, 'Błąd', 'status-error', 'alert-circle');
+        } finally {
+            completedCount++;
+            const percent = Math.round((completedCount / filesToProcess.length) * 100);
+            progressPercentEl.textContent = `${percent}%`;
+            progressFill.style.width = `${percent}%`;
         }
-
-        const percent = Math.round((completedCount / filesToProcess.length) * 100);
-        progressPercentEl.textContent = `${percent}%`;
-        progressFill.style.width = `${percent}%`;
-    }
+    });
 
     downloadBtn.disabled = false;
     lucide.createIcons();

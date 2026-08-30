@@ -28,7 +28,11 @@ export const toggleMobilePreviewBtn = document.getElementById('toggleMobilePrevi
 export const togglePreviewIcon = document.getElementById('togglePreviewIcon');
 export const togglePreviewText = document.getElementById('togglePreviewText');
 export const mobileShowPreviewBanner = document.getElementById('mobileShowPreviewBanner');
-export const showMobilePreviewBtn = document.getElementById('showMobilePreviewBtn');
+export const binPackingVariantsContainer = document.getElementById('binPackingVariantsContainer');
+export const variantSuggestionsList = document.getElementById('variantSuggestionsList');
+export const variantsFoundBadge = document.getElementById('variantsFoundBadge');
+export const skeletonWorkspace = document.getElementById('skeletonWorkspace');
+export const skeletonBoard = document.getElementById('skeletonBoard');
 
 // Inputs
 export const inputs = {
@@ -152,9 +156,29 @@ export function renderThumbnails(images, deleteCallback, moveCallback, endDragCa
 }
 
 export function updateValueDisplays() {
-    const layout = document.querySelector('input[name="layout"]:checked').value;
-    inputs.countLabel.textContent = layout === 'row' ? "Rows" : "Columns";
-    document.getElementById('colCountVal').textContent = inputs.colCount.value;
+    const layout = document.querySelector('input[name="layout"]:checked')?.value || 'bin-packing';
+    if (layout === 'row') {
+        inputs.countLabel.textContent = "Rows";
+    } else if (layout === 'bin-packing') {
+        inputs.countLabel.textContent = "Grid Width (Modules 6–20)";
+    } else {
+        inputs.countLabel.textContent = "Columns";
+    }
+
+    if (layout === 'bin-packing') {
+        inputs.colCount.min = "6";
+        inputs.colCount.max = "20";
+        if (parseInt(inputs.colCount.value) < 6) inputs.colCount.value = "8";
+        const val = parseInt(inputs.colCount.value) || 8;
+        document.getElementById('colCountVal').textContent = `${val} mod`;
+        if (binPackingVariantsContainer) binPackingVariantsContainer.classList.remove('hidden');
+    } else {
+        inputs.colCount.min = "1";
+        inputs.colCount.max = "8";
+        if (parseInt(inputs.colCount.value) > 8) inputs.colCount.value = "4";
+        document.getElementById('colCountVal').textContent = inputs.colCount.value;
+        if (binPackingVariantsContainer) binPackingVariantsContainer.classList.add('hidden');
+    }
     document.getElementById('gapVal').textContent = inputs.gapSize.value;
     document.getElementById('radiusVal').textContent = inputs.radiusSize.value;
     
@@ -167,4 +191,293 @@ export function updateValueDisplays() {
     } else {
         gridSettings.classList.add('hidden');
     }
+}
+
+export function renderVariantSuggestions(variants, onSelect) {
+    if (!variantSuggestionsList) return;
+    variantSuggestionsList.innerHTML = '';
+
+    if (!variants || variants.length === 0) {
+        if (variantsFoundBadge) variantsFoundBadge.classList.add('hidden');
+        variantSuggestionsList.innerHTML = '<div class="col-span-2 text-center text-[10px] text-gray-400 py-4 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">Wgraj zdjęcia, aby wyznaczyć 4 warianty</div>';
+        return;
+    }
+
+    if (variantsFoundBadge) {
+        variantsFoundBadge.classList.remove('hidden');
+        variantsFoundBadge.textContent = 'TOP 4';
+    }
+
+    const currentSliderVal = parseInt(inputs.colCount.value) || 8;
+    const top4 = variants.slice(0, 4);
+
+    top4.forEach(variant => {
+        const isSelected = currentSliderVal === variant.sliderVal;
+
+        // Card container is explicitly a square!
+        const card = document.createElement('div');
+        card.className = `group relative cursor-pointer rounded-xl overflow-hidden aspect-square transition-all border p-1.5 flex items-center justify-center ${
+            isSelected 
+                ? 'bg-accentGreen/15 border-accentGreen shadow-md ring-2 ring-accentGreen/60' 
+                : 'bg-[#0d0d18] border-gray-700/80 hover:border-accentGreen/60 hover:bg-gray-800/40'
+        }`;
+        card.title = `${variant.cols} modułów (${variant.ratioDesc}, ${variant.isGapless ? '0 luk' : variant.emptyCells + ' luk'})`;
+
+        // Miniature square canvas: 220x220 for crisp preview
+        const miniCanvas = document.createElement('canvas');
+        miniCanvas.width = 220;
+        miniCanvas.height = 220;
+        miniCanvas.className = 'w-full h-full object-contain rounded-lg pointer-events-none';
+        
+        const mctx = miniCanvas.getContext('2d');
+        if (mctx) {
+            // Background fill
+            mctx.fillStyle = inputs.bgColor.value || '#0a0a14';
+            mctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
+
+            const pad = 6;
+            const availW = miniCanvas.width - pad * 2;
+            const availH = miniCanvas.height - pad * 2;
+            const scaleX = availW / variant.cols;
+            const scaleY = availH / Math.max(1, variant.totalRows);
+            const scale = Math.min(scaleX, scaleY);
+
+            const offsetX = pad + (availW - (variant.cols * scale)) / 2;
+            const offsetY = pad + (availH - (variant.totalRows * scale)) / 2;
+
+            // Subtle module gap
+            const miniGap = Math.max(1, Math.round(scale * 0.08));
+
+            variant.placed.forEach(b => {
+                const bx = offsetX + b.gx * scale;
+                const by = offsetY + b.gy * scale;
+                const bw = b.gw * scale - miniGap;
+                const bh = b.gh * scale - miniGap;
+
+                if (bw <= 0 || bh <= 0) return;
+
+                const img = b.img;
+                if (img && (img.complete || img.naturalWidth > 0)) {
+                    const nw = img.naturalWidth || img.width || 1;
+                    const nh = img.naturalHeight || img.height || 1;
+                    const ir = nw / nh;
+                    const br = bw / bh;
+                    let sx = 0, sy = 0, sw = nw, sh = nh;
+                    if (ir > br) {
+                        sw = nh * br;
+                        sx = (nw - sw) / 2;
+                    } else {
+                        sh = nw / br;
+                        sy = (nh - sh) / 2;
+                    }
+
+                    mctx.save();
+                    const r = Math.min(3, bw * 0.08, bh * 0.08);
+                    mctx.beginPath();
+                    mctx.roundRect(bx, by, bw, bh, r);
+                    mctx.clip();
+                    mctx.drawImage(img, sx, sy, sw, sh, bx, by, bw, bh);
+                    mctx.restore();
+                } else {
+                    mctx.fillStyle = isSelected ? 'rgba(74, 222, 128, 0.45)' : 'rgba(99, 102, 241, 0.4)';
+                    mctx.fillRect(bx, by, bw, bh);
+                }
+
+                // Subtle block outline
+                mctx.strokeStyle = isSelected ? 'rgba(74, 222, 128, 0.6)' : 'rgba(255, 255, 255, 0.15)';
+                mctx.lineWidth = 1;
+                mctx.strokeRect(bx, by, bw, bh);
+            });
+        }
+
+        // Sleek badge in bottom-right corner
+        const badge = document.createElement('span');
+        badge.className = `absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold pointer-events-none backdrop-blur-md shadow-sm ${
+            isSelected 
+                ? 'bg-accentGreen text-black ring-1 ring-accentGreen/80' 
+                : 'bg-black/80 text-gray-200 group-hover:text-white border border-white/10'
+        }`;
+        badge.textContent = `${variant.cols}m`;
+
+        card.appendChild(miniCanvas);
+        card.appendChild(badge);
+
+        card.onclick = () => {
+            if (onSelect) onSelect(variant.sliderVal);
+        };
+
+        variantSuggestionsList.appendChild(card);
+    });
+}
+
+let skeletonInterval = null;
+let skeletonTiles = [];
+
+export function showSkeletonLoader(fileCount = 6) {
+    if (!skeletonWorkspace || !skeletonBoard) return;
+
+    const count = Math.max(1, fileCount);
+    clearInterval(skeletonInterval);
+    skeletonBoard.innerHTML = '';
+    skeletonBoard.style.aspectRatio = '4 / 3';
+    skeletonTiles = [];
+
+    // Hide empty state and canvas wrapper, show workspace skeleton board
+    emptyState.classList.add('hidden');
+    canvasWrapper.classList.add('hidden');
+    skeletonWorkspace.classList.remove('hidden');
+
+    // 1. Candidate Modular 2D Grid
+    const cols = Math.max(3, Math.min(8, Math.ceil(Math.sqrt(count * 2))));
+    const grid = [];
+    const isOcc = (gx, gy) => grid[gy] && grid[gy][gx];
+    const occ = (gx, gy, w, h) => {
+        for (let y = gy; y < gy + h; y++) {
+            while (grid.length <= y) grid.push(new Array(cols).fill(false));
+            for (let x = gx; x < gx + w; x++) grid[y][x] = true;
+        }
+    };
+    const modularBlocks = [];
+    for (let i = 0; i < count; i++) {
+        const type = i % 3;
+        let w = type === 0 ? 3 : (type === 1 ? 2 : 2);
+        let h = type === 0 ? 2 : (type === 1 ? 3 : 2);
+        if (w > cols) w = cols;
+        for (let y = 0; y < 100; y++) {
+            let placed = false;
+            for (let x = 0; x <= cols - w; x++) {
+                let can = true;
+                for (let cy = y; cy < y + h; cy++) {
+                    for (let cx = x; cx < x + w; cx++) {
+                        if (isOcc(cx, cy)) { can = false; break; }
+                    }
+                    if (!can) break;
+                }
+                if (can) {
+                    occ(x, y, w, h);
+                    modularBlocks.push({ x, y, w, h });
+                    placed = true;
+                    break;
+                }
+            }
+            if (placed) break;
+        }
+    }
+    const totRows = Math.max(1, grid.length);
+    const layoutA = modularBlocks.map(b => ({
+        x: (b.x / cols) * 100,
+        y: (b.y / totRows) * 100,
+        w: (b.w / cols) * 100,
+        h: (b.h / totRows) * 100
+    }));
+
+    // 2. Candidate Masonry Columns
+    const mCols = Math.min(4, Math.max(2, Math.round(Math.sqrt(count))));
+    const colHeights = new Array(mCols).fill(0);
+    const mPlaced = [];
+    for (let i = 0; i < count; i++) {
+        const minCol = colHeights.indexOf(Math.min(...colHeights));
+        const hVal = [1.2, 0.85, 1.4, 1.0][i % 4];
+        mPlaced.push({ col: minCol, y: colHeights[minCol], h: hVal });
+        colHeights[minCol] += hVal;
+    }
+    const maxH = Math.max(...colHeights);
+    const layoutB = mPlaced.map(p => ({
+        x: (p.col / mCols) * 100,
+        y: (p.y / maxH) * 100,
+        w: (1 / mCols) * 100,
+        h: (p.h / maxH) * 100
+    }));
+
+    // 3. Candidate Justified Rows
+    const rCount = Math.min(4, Math.max(2, Math.ceil(count / 3)));
+    const rows = Array.from({ length: rCount }, () => []);
+    for (let i = 0; i < count; i++) {
+        rows[i % rCount].push({ id: i, r: [1.4, 0.9, 1.1, 1.6][i % 4] });
+    }
+    const layoutC = [];
+    let curYPct = 0;
+    const rHPct = 100 / rCount;
+    rows.forEach(rItems => {
+        const totalR = rItems.reduce((acc, it) => acc + it.r, 0);
+        let curXPct = 0;
+        rItems.forEach(it => {
+            const wPct = (it.r / totalR) * 100;
+            layoutC[it.id] = { x: curXPct, y: curYPct, w: wPct, h: rHPct };
+            curXPct += wPct;
+        });
+        curYPct += rHPct;
+    });
+
+    const layouts = [layoutA, layoutB, layoutC];
+    let step = 0;
+
+    // Create N clean tiles with NO text
+    for (let i = 0; i < count; i++) {
+        const tile = document.createElement('div');
+        tile.className = 'skeleton-tile';
+        skeletonBoard.appendChild(tile);
+        skeletonTiles.push(tile);
+    }
+
+    const applyLayout = (layout) => {
+        skeletonTiles.forEach((tile, i) => {
+            const pos = layout[i] || layoutA[i] || { x: 0, y: 0, w: 100, h: 100 };
+            const pad = 2;
+            tile.style.left = `calc(${pos.x}% + ${pad}px)`;
+            tile.style.top = `calc(${pos.y}% + ${pad}px)`;
+            tile.style.width = `calc(${pos.w}% - ${pad * 2}px)`;
+            tile.style.height = `calc(${pos.h}% - ${pad * 2}px)`;
+        });
+    };
+
+    applyLayout(layoutA);
+
+    // 1s per layout switch, crisp and zero lag
+    skeletonInterval = setInterval(() => {
+        step = (step + 1) % layouts.length;
+        applyLayout(layouts[step]);
+    }, 1000);
+}
+
+export function markSkeletonTileReady(index) {
+    if (skeletonTiles && skeletonTiles[index]) {
+        skeletonTiles[index].classList.add('ready');
+    }
+}
+
+export function showRealSkeleton(placedBlocks, cols, totalRows) {
+    if (!skeletonWorkspace || !skeletonBoard || !placedBlocks || placedBlocks.length === 0) return;
+    clearInterval(skeletonInterval);
+    skeletonInterval = null;
+
+    skeletonBoard.style.aspectRatio = `${cols} / ${totalRows}`;
+
+    const pad = 3;
+    placedBlocks.forEach((p, idx) => {
+        let tile = skeletonTiles[idx];
+        if (!tile) {
+            tile = document.createElement('div');
+            skeletonBoard.appendChild(tile);
+            skeletonTiles.push(tile);
+        }
+        tile.className = 'skeleton-tile ready';
+        const xPct = (p.gx / cols) * 100;
+        const yPct = (p.gy / totalRows) * 100;
+        const wPct = (p.gw / cols) * 100;
+        const hPct = (p.gh / totalRows) * 100;
+
+        tile.style.left = `calc(${xPct}% + ${pad}px)`;
+        tile.style.top = `calc(${yPct}% + ${pad}px)`;
+        tile.style.width = `calc(${wPct}% - ${pad * 2}px)`;
+        tile.style.height = `calc(${hPct}% - ${pad * 2}px)`;
+    });
+}
+
+export function hideSkeletonLoader() {
+    if (!skeletonWorkspace) return;
+    clearInterval(skeletonInterval);
+    skeletonInterval = null;
+    skeletonWorkspace.classList.add('hidden');
+    if (skeletonBoard) skeletonBoard.innerHTML = '';
 }

@@ -1,5 +1,5 @@
 import * as ui from './ui.js';
-import { renderCollage } from './collage.js';
+import { renderCollage, generateBinPackingVariants, solveModularPacking } from './collage.js';
 import * as utils from './utils.js';
 import { ImageProcessor } from './arw-processor.js';
 
@@ -9,11 +9,46 @@ let renderTimeout;
 
 // Initialization
 lucide.createIcons();
+ui.updateValueDisplays();
+
+const updateVariantsUI = (autoSelectBest = false) => {
+    const layout = document.querySelector('input[name="layout"]:checked')?.value || 'bin-packing';
+    if (layout === 'bin-packing' && images.length > 0) {
+        try {
+            const variants = generateBinPackingVariants(images);
+            if (autoSelectBest && variants.length > 0) {
+                // Auto-select #1 best variant (closest to square & gapless)
+                ui.inputs.colCount.value = variants[0].sliderVal;
+                ui.updateValueDisplays();
+            }
+            ui.renderVariantSuggestions(variants, (newSliderVal) => {
+                ui.inputs.colCount.value = newSliderVal;
+                ui.updateValueDisplays();
+                triggerRender();
+            });
+        } catch (err) {
+            console.error('Error generating variants:', err);
+        }
+    } else {
+        ui.variantSuggestionsList.innerHTML = '';
+        ui.variantsFoundBadge.classList.add('hidden');
+    }
+};
 
 const triggerRender = () => {
     clearTimeout(renderTimeout);
-    renderTimeout = setTimeout(() => renderCollage(images, false, ui.canvas, ui.ctx, ui.inputs), 20);
+    renderTimeout = setTimeout(async () => {
+        try {
+            await renderCollage(images, false, ui.canvas, ui.ctx, ui.inputs);
+        } catch (err) {
+            console.error('Error in renderCollage:', err);
+        }
+        updateVariantsUI(false);
+    }, 20);
 };
+
+// Initial state
+updateVariantsUI();
 
 // --- Handlers ---
 
@@ -26,59 +61,88 @@ async function handleFiles(e) {
     
     if (eligibleFiles.length === 0) return;
 
-    ui.processingIndicator.classList.remove('hidden');
-    let loadedCount = 0;
-    const total = eligibleFiles.length;
-    ui.loaderCount.textContent = `0 / ${total}`;
+    const animStartTime = Date.now();
+    ui.showSkeletonLoader(eligibleFiles.length);
 
-    for (const file of eligibleFiles) {
+    const concurrency = Math.max(2, Math.min(navigator.hardwareConcurrency || 3, 4));
+
+    const processedResults = await utils.runConcurrent(eligibleFiles, concurrency, async (file, index) => {
         try {
             let processedFile = file;
-            let isArw = file.name.toLowerCase().endsWith('.arw');
+            const isArw = file.name.toLowerCase().endsWith('.arw');
 
             if (isArw) {
-                ui.loaderCount.textContent = `Parsing ARW: ${file.name}...`;
+                if (ui.loaderCount) ui.loaderCount.textContent = `Parsing ARW: ${file.name}...`;
                 const jpegBlob = await ImageProcessor.convertArwToJpeg(file);
                 processedFile = new File([jpegBlob], file.name.replace(/\.arw$/i, '.jpg'), { type: 'image/jpeg' });
             }
 
-            await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.onload = async () => {
-                        const thumbImg = await utils.createThumbnail(img);
-                        images.push({
-                            id: Date.now() + Math.random(),
-                            original: img,
-                            thumb: thumbImg, 
-                            src: img.src,
-                            name: processedFile.name,
-                            date: file.lastModified
-                        });
-                        loadedCount++;
-                        ui.loaderCount.textContent = `${loadedCount} / ${total}`;
-                        resolve();
-                    };
-                    img.onerror = () => reject(new Error('Failed to load image'));
-                    img.src = event.target.result;
+            const objectUrl = URL.createObjectURL(processedFile);
+            const img = await new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(new Error(`Failed to decode image: ${file.name}`));
                 };
-                reader.onerror = () => reject(new Error('Failed to read file'));
-                reader.readAsDataURL(processedFile);
+                image.src = objectUrl;
             });
+
+            const thumbImg = await utils.createThumbnail(img);
+            
+            // Gently highlight this skeleton tile as converted
+            ui.markSkeletonTileReady(index);
+
+            return {
+                id: Date.now() + Math.random(),
+                original: img,
+                thumb: thumbImg, 
+                src: img.src,
+                name: processedFile.name,
+                date: file.lastModified
+            };
         } catch (err) {
             console.error('Error processing file:', file.name, err);
             utils.showToast(`Error: ${file.name}`, 'alert-circle');
+            return null;
+        }
+    });
+
+    const validImages = processedResults.filter(Boolean);
+    images.push(...validImages);
+
+    // Calculate real layout and show real skeleton geometry
+    if (validImages.length > 0) {
+        try {
+            const variants = generateBinPackingVariants(validImages);
+            if (variants && variants.length > 0) {
+                const solution = solveModularPacking(validImages, variants[0].sliderVal);
+                if (solution && solution.placed) {
+                    ui.showRealSkeleton(solution.placed, solution.effectiveCols, solution.totalRows);
+                }
+            }
+        } catch (err) {
+            console.warn('Error computing real skeleton:', err);
         }
     }
 
-    ui.processingIndicator.classList.add('hidden');
+    // Ensure minimum animation duration of 2 seconds
+    const elapsed = Date.now() - animStartTime;
+    const remainingWait = Math.max(0, 2000 - elapsed);
+    if (remainingWait > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingWait));
+    }
+
+    ui.hideSkeletonLoader();
+
     ui.updateUI(images);
     syncSplitInputs();
     renderThumbnailsList();
+    updateVariantsUI(true);
     triggerRender();
-    if (loadedCount > 0) {
-        utils.showToast(`Loaded ${loadedCount} ${loadedCount === 1 ? 'image' : 'images'}`, 'image');
+
+    if (validImages.length > 0) {
+        utils.showToast(`Loaded ${validImages.length} ${validImages.length === 1 ? 'image' : 'images'}`, 'image');
     }
     ui.fileInput.value = '';
     if (ui.emptyStateFileInput) ui.emptyStateFileInput.value = '';
@@ -88,7 +152,9 @@ function renderThumbnailsList() {
     ui.renderThumbnails(
         images, 
         (index) => {
-            images.splice(index, 1);
+            const [removed] = images.splice(index, 1);
+            if (removed?.src?.startsWith('blob:')) URL.revokeObjectURL(removed.src);
+            if (removed?.thumb?.src?.startsWith('blob:')) URL.revokeObjectURL(removed.thumb.src);
             ui.updateUI(images);
             syncSplitInputs();
             renderThumbnailsList();
@@ -235,6 +301,8 @@ Object.values(ui.inputs).forEach(input => {
                 ui.inputs.radiusSize.value = 0;
                 ui.inputs.gridWeight.value = 5;
                 ui.inputs.gridColor.value = '#000000';
+            } else if (e.target.name === 'layout' && e.target.value === 'bin-packing') {
+                updateVariantsUI(true);
             }
             ui.updateValueDisplays(); 
             triggerRender(); 
@@ -259,6 +327,10 @@ Object.values(ui.inputs).forEach(input => {
 
 ui.resetBtn.addEventListener('click', () => {
     if (confirm('Delete everything and start over?')) {
+        images.forEach(img => {
+            if (img?.src?.startsWith('blob:')) URL.revokeObjectURL(img.src);
+            if (img?.thumb?.src?.startsWith('blob:')) URL.revokeObjectURL(img.thumb.src);
+        });
         images.length = 0; // Clear the array in place
         ui.fileInput.value = '';
         ui.resultWrapper.classList.add('hidden');

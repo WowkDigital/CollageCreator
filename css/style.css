@@ -137,3 +137,24 @@ input[type=range]::-webkit-slider-runnable-track {
     from { opacity: 1; }
     to { opacity: 0; transform: translateY(10px); }
 }
+
+/* Desaturated, Minimalist Workspace Skeleton Tiles (No text, gentle ready highlight) */
+.skeleton-tile {
+    background-color: #161722;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.375rem;
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+    transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease,
+                left 0.4s ease, top 0.4s ease, width 0.4s ease, height 0.4s ease;
+}
+
+/* Gently lit up when the corresponding image finishes converting/processing */
+.skeleton-tile.ready {
+    background-color: #192233;
+    border-color: rgba(74, 222, 128, 0.45);
+    box-shadow: 0 0 12px rgba(74, 222, 128, 0.12);
+}
+
+
